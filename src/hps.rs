@@ -28,7 +28,7 @@ const LEFT_CHANNEL_OFFSET: usize = 0x10;
 const RIGHT_CHANNEL_OFFSET: usize = 0x48;
 const DSP_BLOCK_SECTION_OFFSET: usize = 0x80;
 
-/// A conatiner for HPS file data.
+/// A container for HPS file data.
 ///
 /// For general usage, see the [module-level documentation.](crate::hps)
 #[derive(Debug, Clone, PartialEq)]
@@ -50,7 +50,7 @@ pub enum HpsParseError {
     /// The first 8 bytes in the file are not ` HALPST\0`
     #[error("Invalid magic number. Expected ' HALPST\0'")]
     InvalidMagicNumber,
-    /// The number of audio channels in the provided file is not suppored by the library
+    /// The number of audio channels in the provided file is not supported by the library
     #[error("Only stereo is currently supported, but the provided file has {0} audio channel(s)")]
     UnsupportedChannelCount(u32),
 }
@@ -246,7 +246,7 @@ pub struct ChannelInfo {
     pub coefficients: Vec<(i16, i16)>,
 }
 /// The audio data contained in an [`Hps`] is split into multiple "blocks", each
-/// containing [`Frame`]s of encdoded samples as well as a link to the start of the
+/// containing [`Frame`]s of encoded samples as well as a link to the start of the
 /// next block.
 ///
 /// In a stereo [`Hps`], the first half of the frames in each block are for the
