@@ -1,5 +1,7 @@
 # HPS Decode
 
+![CI](https://github.com/DarylPinto/hps_decode/actions/workflows/ci.yml/badge.svg)
+
 A Rust library for decoding _Super Smash Bros. Melee_ music files.
 
 ## Quick Start
