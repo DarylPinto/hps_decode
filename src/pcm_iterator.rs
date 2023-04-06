@@ -2,8 +2,7 @@
 //!
 //! To create a [`PcmIterator`] from an [`Hps`], you can use `.into()`:
 //! ```
-//! let bytes = std::fs::read("./respect-your-elders.hps").unwrap();
-//! let hps: Hps = bytes.as_slice().try_into().unwrap();
+//! let hps: Hps = std::fs::read("./respect-your-elders.hps")?.try_into()?;
 //! let pcm: PcmIterator = hps.into();
 //! ```
 

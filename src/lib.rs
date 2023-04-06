@@ -7,21 +7,23 @@
 //! ```
 //! use hps_decode::{hps::Hps, pcm_iterator::PcmIterator};
 //! use rodio::Source;
+//! use std::error::Error;
 //!
-//! fn main() {
+//! fn main() -> Result<(), Box<dyn Error>> {
 //!     // Decode an .hps file into PCM samples for playback
-//!     let bytes = std::fs::read("./respect-your-elders.hps").unwrap();
-//!     let hps: Hps = bytes.as_slice().try_into().unwrap();
+//!     let hps: Hps = std::fs::read("./respect-your-elders.hps")?.try_into()?;
 //!     let pcm: PcmIterator = hps.into();
 //!
 //!     // Play the song with the rodio library
-//!     let (_stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
+//!     let (_stream, stream_handle) = rodio::OutputStream::try_default()?;
 //!     let source = MySource(pcm);
-//!     stream_handle.play_raw(source.convert_samples()).unwrap();
+//!     stream_handle.play_raw(source.convert_samples())?;
 //!
 //!     // Rodio plays sound in a separate audio thread,
 //!     // so we need to keep the main thread alive while it's playing.
 //!     std::thread::sleep(std::time::Duration::from_secs(120));
+//!
+//!     Ok(())
 //! }
 //!
 //! // This wrapper allows us to implement `rodio::Source`

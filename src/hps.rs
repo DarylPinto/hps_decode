@@ -1,11 +1,9 @@
 //! Contains [`Hps`] for representing the contents of an `.hps` file in a structured format.
 //!
-//! To extract the data from an `.hps` binary file into an [`Hps`], you can use `.try_into()` on a byte slice:
+//! To convert raw binary data from an `.hps` file into an [`Hps`], you can use `.try_into()`:
 //!
 //! ```
-//! let bytes = std::fs::read("./respect-your-elders.hps").unwrap();
-//! let hps: Hps = bytes.as_slice().try_into().unwrap();
-//!
+//! let hps: Hps = std::fs::read("./respect-your-elders.hps")?.try_into()?;
 //! assert_eq!(hps.sample_rate, 32_000);
 //! assert_eq!(hps.channel_count, 2);
 //! ```
