@@ -163,6 +163,22 @@ impl TryFrom<&[u8]> for Hps {
     }
 }
 
+impl TryFrom<Vec<u8>> for Hps {
+    type Error = HpsParseError;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_slice())
+    }
+}
+
+impl TryFrom<&Vec<u8>> for Hps {
+    type Error = HpsParseError;
+
+    fn try_from(value: &Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_slice())
+    }
+}
+
 impl Hps {
     /// Decode an [`Hps`] into a vector of PCM samples. If you'd like to get an
     /// _infinite_ iterator for a looping song, take a look at the [pcm_iterator](crate::pcm_iterator) module.
@@ -324,8 +340,10 @@ mod tests {
 
     #[test]
     fn decodes_blocks_correctly() {
-        let song = std::fs::read("test-data/test-song.hps").unwrap();
-        let hps = Hps::try_from(song.as_slice()).unwrap();
+        let hps: Hps = std::fs::read("test-data/test-song.hps")
+            .unwrap()
+            .try_into()
+            .unwrap();
         let decoded = hps.decode();
         let decoded_bytes = decoded
             .iter()
@@ -343,8 +361,10 @@ mod tests {
 
     #[test]
     fn doesnt_include_any_blocks_more_than_once() {
-        let song = std::fs::read("test-data/test-song.hps").unwrap();
-        let hps = Hps::try_from(song.as_slice()).unwrap();
+        let hps: Hps = std::fs::read("test-data/test-song.hps")
+            .unwrap()
+            .try_into()
+            .unwrap();
         let block_count = hps.blocks.len();
         let unique_block_start_addresses = hps
             .blocks
@@ -357,8 +377,10 @@ mod tests {
 
     #[test]
     fn reads_metadata_correctly() {
-        let song = std::fs::read("test-data/test-song.hps").unwrap();
-        let hps = Hps::try_from(song.as_slice()).unwrap();
+        let hps: Hps = std::fs::read("test-data/test-song.hps")
+            .unwrap()
+            .try_into()
+            .unwrap();
         assert_eq!(hps.sample_rate, 32000);
         assert_eq!(hps.channel_count, 2);
         assert_eq!(
