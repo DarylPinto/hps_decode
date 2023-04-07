@@ -1,6 +1,15 @@
 # HPS Decode
 
-![CI](https://github.com/DarylPinto/hps_decode/actions/workflows/ci.yml/badge.svg)
+[![Latest Version][version-badge]][version-url]
+[![Rust Documentation][docs-badge]][docs-url]
+[![Build Status][actions-badge]][actions-url]
+
+[actions-badge]: https://github.com/DarylPinto/hps_decode/actions/workflows/ci.yml/badge.svg
+[actions-url]: https://github.com/DarylPinto/hps_decode/actions/workflows/ci.yml
+[version-badge]: https://img.shields.io/crates/v/hps_decode.svg
+[version-url]: https://crates.io/crates/hps_decode
+[docs-badge]: https://img.shields.io/badge/docs-latest-blue.svg
+[docs-url]: https://docs.rs/hps_decode
 
 A Rust library for decoding _Super Smash Bros. Melee_ music files.
 
