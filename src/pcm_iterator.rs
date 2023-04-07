@@ -4,6 +4,11 @@
 //! ```
 //! let hps: Hps = std::fs::read("./respect-your-elders.hps")?.try_into()?;
 //! let pcm: PcmIterator = hps.into();
+//!
+//! // For looping songs, this will go on forever:
+//! for sample in pcm {
+//!     println!("{sample}");
+//! }
 //! ```
 
 use crate::hps::Hps;

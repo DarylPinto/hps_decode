@@ -35,8 +35,8 @@ pub struct Hps {
     pub sample_rate: u32,
     /// Number of audio channels
     pub channel_count: u32,
-    /// Information about the audio channel(s)
-    pub channel_info: Vec<ChannelInfo>,
+    /// Information about the audio channels
+    pub channel_info: [ChannelInfo; 2],
     /// DSP Block data
     pub blocks: Vec<Block>,
     /// Index of the block to loop back to when the track ends. `None` if the track doesn't loop
@@ -49,7 +49,7 @@ pub enum HpsParseError {
     #[error("Invalid magic number. Expected ' HALPST\0'")]
     InvalidMagicNumber,
     /// The number of audio channels in the provided file is not supported by the library
-    #[error("Only stereo is currently supported, but the provided file has {0} audio channel(s)")]
+    #[error("Only stereo is supported, but the provided file has {0} audio channel(s)")]
     UnsupportedChannelCount(u32),
 }
 
@@ -120,7 +120,7 @@ impl TryFrom<&[u8]> for Hps {
                 address,
                 dsp_data_length,
                 next_block_address,
-                decoder_states: vec![left_decoder_state, right_decoder_state],
+                decoder_states: [left_decoder_state, right_decoder_state],
                 frames,
             };
 
@@ -156,7 +156,7 @@ impl TryFrom<&[u8]> for Hps {
         Ok(Self {
             channel_count,
             sample_rate,
-            channel_info: vec![left_channel_info, right_channel_info],
+            channel_info: [left_channel_info, right_channel_info],
             blocks,
             loop_block_index,
         })
@@ -271,8 +271,7 @@ pub struct Block {
     pub address: u32,
     pub dsp_data_length: u32,
     pub next_block_address: u32,
-    pub decoder_states: Vec<DSPDecoderState>,
-    // pub right_decoder_state: DSPDecoderState,
+    pub decoder_states: [DSPDecoderState; 2],
     pub frames: Vec<Frame>,
 }
 
