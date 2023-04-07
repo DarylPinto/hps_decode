@@ -5,7 +5,7 @@
 //! Here is a quick example of how to play a stereo `.hps` file using [rodio 0.17](https://docs.rs/rodio/0.17.1/rodio/index.html):
 //!
 //! ```
-//! use hps_decode::{hps::Hps, pcm_iterator::PcmIterator};
+//! use hps_decode::{Hps, PcmIterator};
 //! use rodio::Source;
 //! use std::error::Error;
 //!
@@ -46,6 +46,9 @@
 //! For general purpose, language agnostic documentation of the `.hps` file format,
 //! [see here.](https://github.com/DarylPinto/hps_decode/blob/main/HPS-LAYOUT.md)
 //!
+
+pub use hps::Hps;
+pub use pcm_iterator::PcmIterator;
 
 pub mod hps;
 pub mod pcm_iterator;
