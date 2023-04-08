@@ -18,7 +18,7 @@ A Rust library for decoding _Super Smash Bros. Melee_ music files.
 Here is a quick example of how to play a stereo `.hps` file using [rodio 0.17](https://docs.rs/rodio/0.17.1/rodio/index.html):
 
 ```rs
-use hps_decode::{hps::Hps, pcm_iterator::PcmIterator};
+use hps_decode::{Hps, PcmIterator};
 use rodio::Source;
 use std::error::Error;
 
