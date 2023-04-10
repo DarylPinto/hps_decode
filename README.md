@@ -4,12 +4,12 @@
 [![Rust Documentation][docs-badge]][docs-url]
 [![Build Status][actions-badge]][actions-url]
 
-[actions-badge]: https://github.com/DarylPinto/hps_decode/actions/workflows/ci.yml/badge.svg
-[actions-url]: https://github.com/DarylPinto/hps_decode/actions/workflows/ci.yml
 [version-badge]: https://img.shields.io/crates/v/hps_decode.svg
 [version-url]: https://crates.io/crates/hps_decode
 [docs-badge]: https://img.shields.io/badge/docs-latest-blue.svg
 [docs-url]: https://docs.rs/hps_decode
+[actions-badge]: https://github.com/DarylPinto/hps_decode/actions/workflows/ci.yml/badge.svg
+[actions-url]: https://github.com/DarylPinto/hps_decode/actions/workflows/ci.yml
 
 A Rust library for decoding _Super Smash Bros. Melee_ music files.
 
@@ -17,7 +17,7 @@ A Rust library for decoding _Super Smash Bros. Melee_ music files.
 
 Here is a quick example of how to play a stereo `.hps` file using [rodio 0.17](https://docs.rs/rodio/0.17.1/rodio/index.html):
 
-```rs
+```rust
 use hps_decode::{Hps, PcmIterator};
 use rodio::Source;
 use std::error::Error;
@@ -55,7 +55,11 @@ impl rodio::Source for MySource {
 }
 ```
 
+## Documentation
+
+Check out [docs.rs][docs-url] for more details about the library.
+
 ## .HPS File Layout
 
-For general purpose, language agnostic documentation of the `.hps` file format,
+For general purpose, language agnostic information about the `.hps` file format,
 [see here.](https://github.com/DarylPinto/hps_decode/blob/main/HPS-LAYOUT.md)
