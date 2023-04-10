@@ -28,7 +28,6 @@ impl Iterator for PcmIterator {
     type Item = i16;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // Start iterating on the actual samples
         match (self.samples.get(self.current_index), self.loop_sample_index) {
             // If there are more samples to play, return the next one
             (Some(&sample), _) => {

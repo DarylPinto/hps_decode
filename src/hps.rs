@@ -72,18 +72,18 @@ impl TryFrom<&[u8]> for Hps {
         }
 
         // Read the channel info in `bytes` at `offset`
-        let read_channel_info_at = |offset: usize| ChannelInfo {
-            largest_block_length: read_u32(bytes, offset),
-            sample_count: read_u32(bytes, offset + 0x08),
-            coefficients: (0x10..0x30)
-                .step_by(4)
-                .map(|step| {
-                    (
-                        read_i16(bytes, offset + step),
-                        read_i16(bytes, offset + step + 2),
-                    )
-                })
-                .collect(),
+        let read_channel_info_at = |offset: usize| {
+            let mut coefficients = [(0, 0); 8];
+            (0x10..0x30).step_by(4).enumerate().for_each(|(i, step)| {
+                let coef1 = read_i16(bytes, offset + step);
+                let coef2 = read_i16(bytes, offset + step + 2);
+                coefficients[i] = (coef1, coef2);
+            });
+            ChannelInfo {
+                largest_block_length: read_u32(bytes, offset),
+                sample_count: read_u32(bytes, offset + 0x08),
+                coefficients,
+            }
         };
 
         // Read the DSP block data in `bytes` at `block_start_address`
@@ -257,7 +257,7 @@ impl Hps {
 pub struct ChannelInfo {
     pub largest_block_length: u32,
     pub sample_count: u32,
-    pub coefficients: Vec<(i16, i16)>,
+    pub coefficients: [(i16, i16); 8],
 }
 /// The audio data contained in an [`Hps`] is split into multiple "blocks", each
 /// containing [`Frame`]s of encoded samples as well as a link to the start of the
@@ -265,7 +265,6 @@ pub struct ChannelInfo {
 ///
 /// In a stereo [`Hps`], the first half of the frames in each block are for the
 /// left audio channel, and other half are for the right.
-///
 #[derive(Debug, Clone, PartialEq)]
 pub struct Block {
     pub address: u32,
@@ -351,7 +350,7 @@ mod tests {
 
         // // Create a new binary file of decoded samples for testing
         // use std::io::prelude::*;
-        // let mut file = std::fs::File::create("bin.bin").unwrap();
+        // let mut file = std::fs::File::create("new.bin").unwrap();
         // file.write_all(&decoded_bytes).unwrap();
 
         let expected_bytes = std::fs::read("test-data/test-song-decoded.bin").unwrap();
@@ -387,7 +386,7 @@ mod tests {
             ChannelInfo {
                 largest_block_length: 65536,
                 sample_count: 2874134,
-                coefficients: vec![
+                coefficients: [
                     (492, -294),
                     (2389, -1166),
                     (1300, 135),
@@ -404,7 +403,7 @@ mod tests {
             ChannelInfo {
                 largest_block_length: 65536,
                 sample_count: 2874134,
-                coefficients: vec![
+                coefficients: [
                     (411, -287),
                     (2359, -1100),
                     (1247, 143),
