@@ -18,13 +18,18 @@
 //! If you'd like to get an _infinite_ iterator for a looping song, take a look at the
 //! [pcm_iterator](crate::pcm_iterator) module.
 
+use crate::parser::{parse_block, parse_channel_info, parse_file_header};
+use nom::multi::count;
 use rayon::prelude::*;
 use thiserror::Error;
 
-const FILE_HEADER_OFFSET: usize = 0;
-const LEFT_CHANNEL_OFFSET: usize = 0x10;
-const RIGHT_CHANNEL_OFFSET: usize = 0x48;
 const DSP_BLOCK_SECTION_OFFSET: usize = 0x80;
+
+// fn main() {
+//     let bytes = include_bytes!("../test-song.hps");
+//     let (_, parsed) = parse_hps(bytes).unwrap();
+//     dbg!(parsed.blocks.len());
+// }
 
 /// A container for HPS file data.
 ///
@@ -51,6 +56,21 @@ pub enum HpsParseError {
     /// The number of audio channels in the provided file is not supported by the library
     #[error("Only stereo is supported, but the provided file has {0} audio channel(s)")]
     UnsupportedChannelCount(u32),
+
+    // TODO
+    #[error("TODO")]
+    UnexpectedEof,
+
+    #[error("TODO")]
+    TODO,
+}
+
+impl<E> From<nom::Err<E>> for HpsParseError {
+    fn from(value: nom::Err<E>) -> Self {
+        Self::TODO
+        // match value {
+        // }
+    }
 }
 
 impl TryFrom<&[u8]> for Hps {
@@ -58,104 +78,33 @@ impl TryFrom<&[u8]> for Hps {
 
     /// Create an `Hps` from a byte slice
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        // Ensure magic number is present
-        if &bytes[..0x08] != b" HALPST\0" {
-            return Err(Self::Error::InvalidMagicNumber);
-        }
+        let file_size = bytes.len();
 
-        let channel_count = read_u32(bytes, FILE_HEADER_OFFSET + 0x0C);
-        let sample_rate = read_u32(bytes, FILE_HEADER_OFFSET + 0x08);
-
-        // Ensure provided file has two audio channels
-        if channel_count != 2 {
-            return Err(Self::Error::UnsupportedChannelCount(channel_count));
-        }
-
-        // Read the channel info in `bytes` at `offset`
-        let read_channel_info_at = |offset: usize| {
-            let mut coefficients = [(0, 0); 8];
-            (0x10..0x30).step_by(4).enumerate().for_each(|(i, step)| {
-                let coef1 = read_i16(bytes, offset + step);
-                let coef2 = read_i16(bytes, offset + step + 2);
-                coefficients[i] = (coef1, coef2);
-            });
-            ChannelInfo {
-                largest_block_length: read_u32(bytes, offset),
-                sample_count: read_u32(bytes, offset + 0x08),
-                coefficients,
-            }
-        };
-
-        // Read the DSP block data in `bytes` at `block_start_address`
-        // Returns the block as well as the address of the next block
-        let read_block_at = |block_start_address: usize| -> (Block, usize) {
-            let address = block_start_address as u32;
-            let dsp_data_length = read_u32(bytes, block_start_address);
-            let next_block_address = read_u32(bytes, block_start_address + 0x08);
-
-            let frames = ((block_start_address + 0x20)
-                ..(block_start_address + 0x20 + dsp_data_length as usize))
-                .step_by(8)
-                .filter_map(|frame_offset| {
-                    Some(Frame {
-                        header: bytes[frame_offset],
-                        encoded_sample_data: bytes[(frame_offset + 1)..(frame_offset + 8)]
-                            .try_into()
-                            .ok()?,
-                    })
-                })
-                .collect::<Vec<_>>();
-
-            let read_decoder_state_at = |ds_offset: usize| DSPDecoderState {
-                ps_hi: bytes[block_start_address + ds_offset],
-                ps: bytes[block_start_address + ds_offset + 1],
-                initial_hist_1: read_i16(bytes, block_start_address + ds_offset + 2),
-                initial_hist_2: read_i16(bytes, block_start_address + ds_offset + 4),
-            };
-
-            let left_decoder_state = read_decoder_state_at(0x0C);
-            let right_decoder_state = read_decoder_state_at(0x14);
-
-            let block = Block {
-                address,
-                dsp_data_length,
-                next_block_address,
-                decoder_states: [left_decoder_state, right_decoder_state],
-                frames,
-            };
-
-            (block, next_block_address as usize)
-        };
+        // File Header
+        let (bytes, (sample_rate, channel_count)) = parse_file_header(bytes)?;
 
         // Left and Right Channel Information
-        let left_channel_info = read_channel_info_at(LEFT_CHANNEL_OFFSET);
-        let right_channel_info = read_channel_info_at(RIGHT_CHANNEL_OFFSET);
+        let (bytes, left_channel_info) = parse_channel_info(bytes)?;
+        let (bytes, right_channel_info) = parse_channel_info(bytes)?;
 
         // DSP Blocks
         let largest_block_length = std::cmp::max(
             left_channel_info.largest_block_length as usize,
             right_channel_info.largest_block_length as usize,
         );
-        let block_count = ((bytes.len() - DSP_BLOCK_SECTION_OFFSET) / largest_block_length) + 1;
-        let blocks = (0..block_count)
-            .scan(DSP_BLOCK_SECTION_OFFSET, |next_block_address, _| {
-                let (block, next) = read_block_at(*next_block_address);
-                *next_block_address = next;
-                Some(block)
-            })
-            .collect::<Vec<_>>();
+        let block_count = ((file_size - DSP_BLOCK_SECTION_OFFSET) / largest_block_length) + 1;
 
-        // Index of the block to loop back to when the track ends
+        let (_, blocks) = count(parse_block(file_size), block_count)(bytes)?;
+
         let loop_block_index = blocks.last().and_then(|last_block| {
             blocks
                 .iter()
                 .position(|block| block.address == last_block.next_block_address)
         });
 
-        // Final HPS structure
-        Ok(Self {
-            channel_count,
+        Ok(Hps {
             sample_rate,
+            channel_count,
             channel_info: [left_channel_info, right_channel_info],
             blocks,
             loop_block_index,
@@ -257,7 +206,7 @@ impl Hps {
 pub struct ChannelInfo {
     pub largest_block_length: u32,
     pub sample_count: u32,
-    pub coefficients: [(i16, i16); 8],
+    pub coefficients: Vec<(i16, i16)>,
 }
 /// The audio data contained in an [`Hps`] is split into multiple "blocks", each
 /// containing [`Frame`]s of encoded samples as well as a link to the start of the
@@ -276,8 +225,8 @@ pub struct Block {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DSPDecoderState {
-    ps_hi: u8, // unused?
-    ps: u8,    // unused?
+    // ps_hi: u8, // unused?
+    // ps: u8,    // unused?
     pub initial_hist_1: i16,
     pub initial_hist_2: i16,
 }
@@ -386,7 +335,7 @@ mod tests {
             ChannelInfo {
                 largest_block_length: 65536,
                 sample_count: 2874134,
-                coefficients: [
+                coefficients: vec![
                     (492, -294),
                     (2389, -1166),
                     (1300, 135),
@@ -403,7 +352,7 @@ mod tests {
             ChannelInfo {
                 largest_block_length: 65536,
                 sample_count: 2874134,
-                coefficients: [
+                coefficients: vec![
                     (411, -287),
                     (2359, -1100),
                     (1247, 143),
