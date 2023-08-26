@@ -66,3 +66,19 @@ impl From<Hps> for PcmIterator {
         }
     }
 }
+
+#[cfg(feature = "rodio-source")]
+impl rodio::Source for PcmIterator {
+    fn current_frame_len(&self) -> Option<usize> {
+        None
+    }
+    fn channels(&self) -> u16 {
+        self.channel_count as u16
+    }
+    fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+    fn total_duration(&self) -> Option<std::time::Duration> {
+        None
+    }
+}
