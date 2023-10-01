@@ -18,13 +18,17 @@
 //! If you'd like to get an _infinite_ iterator for a looping song, take a look at the
 //! [pcm_iterator](crate::pcm_iterator) module.
 
-use rayon::prelude::*;
-use thiserror::Error;
+use std::collections::HashSet;
 
-const FILE_HEADER_OFFSET: usize = 0;
-const LEFT_CHANNEL_OFFSET: usize = 0x10;
-const RIGHT_CHANNEL_OFFSET: usize = 0x48;
-const DSP_BLOCK_SECTION_OFFSET: usize = 0x80;
+use nom::multi::many0;
+use rayon::prelude::*;
+
+use crate::errors::HpsParseError;
+use crate::parsers::{parse_block, parse_channel_info, parse_file_header};
+
+const DSP_BLOCK_SECTION_OFFSET: u32 = 0x80;
+const FRAME_SAMPLE_COUNT: usize = 14;
+pub(crate) const CHANNEL_COEFFICIENT_PAIR_COUNT: usize = 8;
 
 /// A container for HPS file data.
 ///
@@ -43,119 +47,43 @@ pub struct Hps {
     pub loop_block_index: Option<usize>,
 }
 
-#[derive(Error, Debug)]
-pub enum HpsParseError {
-    /// The first 8 bytes in the file are not ` HALPST\0`
-    #[error("Invalid magic number. Expected ' HALPST\0'")]
-    InvalidMagicNumber,
-    /// The number of audio channels in the provided file is not supported by the library
-    #[error("Only stereo is supported, but the provided file has {0} audio channel(s)")]
-    UnsupportedChannelCount(u32),
-}
-
 impl TryFrom<&[u8]> for Hps {
     type Error = HpsParseError;
 
     /// Create an `Hps` from a byte slice
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        // Ensure magic number is present
-        if &bytes[..0x08] != b" HALPST\0" {
-            return Err(Self::Error::InvalidMagicNumber);
-        }
+        let file_size = bytes.len();
 
-        let channel_count = read_u32(bytes, FILE_HEADER_OFFSET + 0x0C);
-        let sample_rate = read_u32(bytes, FILE_HEADER_OFFSET + 0x08);
-
-        // Ensure provided file has two audio channels
-        if channel_count != 2 {
-            return Err(Self::Error::UnsupportedChannelCount(channel_count));
-        }
-
-        // Read the channel info in `bytes` at `offset`
-        let read_channel_info_at = |offset: usize| {
-            let mut coefficients = [(0, 0); 8];
-            (0x10..0x30).step_by(4).enumerate().for_each(|(i, step)| {
-                let coef1 = read_i16(bytes, offset + step);
-                let coef2 = read_i16(bytes, offset + step + 2);
-                coefficients[i] = (coef1, coef2);
-            });
-            ChannelInfo {
-                largest_block_length: read_u32(bytes, offset),
-                sample_count: read_u32(bytes, offset + 0x08),
-                coefficients,
-            }
-        };
-
-        // Read the DSP block data in `bytes` at `block_start_address`
-        // Returns the block as well as the address of the next block
-        let read_block_at = |block_start_address: usize| -> (Block, usize) {
-            let address = block_start_address as u32;
-            let dsp_data_length = read_u32(bytes, block_start_address);
-            let next_block_address = read_u32(bytes, block_start_address + 0x08);
-
-            let frames = ((block_start_address + 0x20)
-                ..(block_start_address + 0x20 + dsp_data_length as usize))
-                .step_by(8)
-                .filter_map(|frame_offset| {
-                    Some(Frame {
-                        header: bytes[frame_offset],
-                        encoded_sample_data: bytes[(frame_offset + 1)..(frame_offset + 8)]
-                            .try_into()
-                            .ok()?,
-                    })
-                })
-                .collect::<Vec<_>>();
-
-            let read_decoder_state_at = |ds_offset: usize| DSPDecoderState {
-                ps_hi: bytes[block_start_address + ds_offset],
-                ps: bytes[block_start_address + ds_offset + 1],
-                initial_hist_1: read_i16(bytes, block_start_address + ds_offset + 2),
-                initial_hist_2: read_i16(bytes, block_start_address + ds_offset + 4),
-            };
-
-            let left_decoder_state = read_decoder_state_at(0x0C);
-            let right_decoder_state = read_decoder_state_at(0x14);
-
-            let block = Block {
-                address,
-                dsp_data_length,
-                next_block_address,
-                decoder_states: [left_decoder_state, right_decoder_state],
-                frames,
-            };
-
-            (block, next_block_address as usize)
-        };
+        // File Header
+        let (bytes, (sample_rate, channel_count)) = parse_file_header(bytes)?;
 
         // Left and Right Channel Information
-        let left_channel_info = read_channel_info_at(LEFT_CHANNEL_OFFSET);
-        let right_channel_info = read_channel_info_at(RIGHT_CHANNEL_OFFSET);
+        let (bytes, left_channel_info) = parse_channel_info(bytes)?;
+        let (bytes, right_channel_info) = parse_channel_info(bytes)?;
 
-        // DSP Blocks
-        let largest_block_length = std::cmp::max(
-            left_channel_info.largest_block_length as usize,
-            right_channel_info.largest_block_length as usize,
-        );
-        let block_count = ((bytes.len() - DSP_BLOCK_SECTION_OFFSET) / largest_block_length) + 1;
-        let blocks = (0..block_count)
-            .scan(DSP_BLOCK_SECTION_OFFSET, |next_block_address, _| {
-                let (block, next) = read_block_at(*next_block_address);
-                *next_block_address = next;
-                Some(block)
-            })
-            .collect::<Vec<_>>();
+        // Parse the rest of the file as DSP blocks
+        let (_, mut blocks) = many0(parse_block(file_size))(bytes)?;
 
-        // Index of the block to loop back to when the track ends
+        // Remove any blocks whose `address` is not referenced by any other
+        // blocks' `next_block_address`
+        //
+        // This is specifically to remove any blocks that might have been
+        // accidentally parsed from garbage data. While it's extremely unlikely
+        // to occur in a real HPS file, better safe than sorry.
+        let valid_block_offsets = std::iter::once(DSP_BLOCK_SECTION_OFFSET)
+            .chain(blocks.iter().map(|b| b.next_block_address))
+            .collect::<HashSet<_>>();
+        blocks.retain(|b| valid_block_offsets.contains(&b.address));
+
         let loop_block_index = blocks.last().and_then(|last_block| {
             blocks
                 .iter()
                 .position(|block| block.address == last_block.next_block_address)
         });
 
-        // Final HPS structure
-        Ok(Self {
-            channel_count,
+        Ok(Hps {
             sample_rate,
+            channel_count,
             channel_info: [left_channel_info, right_channel_info],
             blocks,
             loop_block_index,
@@ -218,7 +146,7 @@ impl Hps {
         decoder_state: &DSPDecoderState,
         coefficients: &[(i16, i16)],
     ) -> Vec<i16> {
-        let sample_count = frames.len() * 14;
+        let sample_count = frames.len() * FRAME_SAMPLE_COUNT;
         let mut samples: Vec<i16> = Vec::with_capacity(sample_count);
 
         let mut hist1 = decoder_state.initial_hist_1;
@@ -257,8 +185,9 @@ impl Hps {
 pub struct ChannelInfo {
     pub largest_block_length: u32,
     pub sample_count: u32,
-    pub coefficients: [(i16, i16); 8],
+    pub coefficients: [(i16, i16); CHANNEL_COEFFICIENT_PAIR_COUNT],
 }
+
 /// The audio data contained in an [`Hps`] is split into multiple "blocks", each
 /// containing [`Frame`]s of encoded samples as well as a link to the start of the
 /// next block.
@@ -276,8 +205,8 @@ pub struct Block {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DSPDecoderState {
-    ps_hi: u8, // unused?
-    ps: u8,    // unused?
+    // ps_hi: u8, // unused?
+    // ps: u8,    // unused?
     pub initial_hist_1: i16,
     pub initial_hist_2: i16,
 }
@@ -309,26 +238,6 @@ fn clamp_i16(val: i32) -> i16 {
     } else {
         val as i16
     }
-}
-
-fn read_i16(bytes: &[u8], offset: usize) -> i16 {
-    let size = (i16::BITS / 8) as usize;
-    let end: usize = offset + size;
-    i16::from_be_bytes(
-        bytes[offset..end]
-            .try_into()
-            .unwrap_or_else(|_| unreachable!()),
-    )
-}
-
-fn read_u32(bytes: &[u8], offset: usize) -> u32 {
-    let size = (u32::BITS / 8) as usize;
-    let end: usize = offset + size;
-    u32::from_be_bytes(
-        bytes[offset..end]
-            .try_into()
-            .unwrap_or_else(|_| unreachable!()),
-    )
 }
 
 #[cfg(test)]
@@ -371,6 +280,17 @@ mod tests {
             .collect::<HashSet<_>>();
         let unique_block_count = unique_block_start_addresses.len();
         assert_eq!(block_count, unique_block_count);
+    }
+
+    #[test]
+    fn parses_last_block_even_if_its_very_short() {
+        let hps: Hps = std::fs::read("test-data/short-last-block-with-loop.hps")
+            .unwrap()
+            .try_into()
+            .unwrap();
+
+        assert_eq!(hps.blocks.len(), 8);
+        assert!(hps.loop_block_index.is_some());
     }
 
     #[test]
