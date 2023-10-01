@@ -20,10 +20,11 @@
 
 use std::collections::HashSet;
 
-use crate::parser::{parse_block, parse_channel_info, parse_file_header};
 use nom::multi::many0;
 use rayon::prelude::*;
-use thiserror::Error;
+
+use crate::errors::HpsParseError;
+use crate::parsers::{parse_block, parse_channel_info, parse_file_header};
 
 const DSP_BLOCK_SECTION_OFFSET: u32 = 0x80;
 const FRAME_SAMPLE_COUNT: usize = 14;
@@ -44,31 +45,6 @@ pub struct Hps {
     pub blocks: Vec<Block>,
     /// Index of the block to loop back to when the track ends. `None` if the track doesn't loop
     pub loop_block_index: Option<usize>,
-}
-
-#[derive(Error, Debug)]
-pub enum HpsParseError {
-    /// The first 8 bytes in the file are not ` HALPST\0`
-    #[error("Invalid magic number. Expected ' HALPST\0'")]
-    InvalidMagicNumber,
-    /// The number of audio channels in the provided file is not supported by the library
-    #[error("Only stereo is supported, but the provided file has {0} audio channel(s)")]
-    UnsupportedChannelCount(u32),
-
-    // TODO
-    #[error("TODO")]
-    UnexpectedEof,
-
-    #[error("TODO")]
-    TODO,
-}
-
-impl<E> From<nom::Err<E>> for HpsParseError {
-    fn from(value: nom::Err<E>) -> Self {
-        Self::TODO
-        // match value {
-        // }
-    }
 }
 
 impl TryFrom<&[u8]> for Hps {

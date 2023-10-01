@@ -46,7 +46,8 @@
 //! For general purpose, language agnostic documentation of the `.hps` file format,
 //! [see here.](https://github.com/DarylPinto/hps_decode/blob/main/HPS-LAYOUT.md)
 
-mod parser;
+mod errors;
+mod parsers;
 
 pub use hps::Hps;
 pub use pcm_iterator::PcmIterator;

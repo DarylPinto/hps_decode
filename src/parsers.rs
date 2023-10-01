@@ -8,12 +8,20 @@ use nom::{
     IResult,
 };
 
+use crate::errors::{HpsParseError, NomByteInputError};
 use crate::hps::{Block, ChannelInfo, DSPDecoderState, Frame, CHANNEL_COEFFICIENT_PAIR_COUNT};
 
-pub(crate) fn parse_file_header(bytes: &[u8]) -> IResult<&[u8], (u32, u32)> {
-    let (bytes, _) = tag(" HALPST\0")(bytes)?;
+pub(crate) fn parse_file_header(bytes: &[u8]) -> Result<(&[u8], (u32, u32)), HpsParseError> {
+    use HpsParseError::*;
+
+    let (bytes, _) =
+        tag(" HALPST\0")(bytes).map_err(|_: NomByteInputError<'_>| InvalidMagicNumber)?;
     let (bytes, sample_rate) = be_u32(bytes)?;
     let (bytes, channel_count) = be_u32(bytes)?;
+
+    if channel_count != 2 {
+        return Err(UnsupportedChannelCount(channel_count));
+    }
 
     Ok((bytes, (sample_rate, channel_count)))
 }
