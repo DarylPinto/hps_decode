@@ -18,18 +18,16 @@
 //! If you'd like to get an _infinite_ iterator for a looping song, take a look at the
 //! [pcm_iterator](crate::pcm_iterator) module.
 
+use std::collections::HashSet;
+
 use crate::parser::{parse_block, parse_channel_info, parse_file_header};
-use nom::multi::count;
+use nom::multi::many0;
 use rayon::prelude::*;
 use thiserror::Error;
 
-const DSP_BLOCK_SECTION_OFFSET: usize = 0x80;
-
-// fn main() {
-//     let bytes = include_bytes!("../test-song.hps");
-//     let (_, parsed) = parse_hps(bytes).unwrap();
-//     dbg!(parsed.blocks.len());
-// }
+const DSP_BLOCK_SECTION_OFFSET: u32 = 0x80;
+const FRAME_SAMPLE_COUNT: usize = 14;
+pub(crate) const CHANNEL_COEFFICIENT_PAIR_COUNT: usize = 8;
 
 /// A container for HPS file data.
 ///
@@ -87,14 +85,19 @@ impl TryFrom<&[u8]> for Hps {
         let (bytes, left_channel_info) = parse_channel_info(bytes)?;
         let (bytes, right_channel_info) = parse_channel_info(bytes)?;
 
-        // DSP Blocks
-        let largest_block_length = std::cmp::max(
-            left_channel_info.largest_block_length as usize,
-            right_channel_info.largest_block_length as usize,
-        );
-        let block_count = ((file_size - DSP_BLOCK_SECTION_OFFSET) / largest_block_length) + 1;
+        // Parse the rest of the file as DSP blocks
+        let (_, mut blocks) = many0(parse_block(file_size))(bytes)?;
 
-        let (_, blocks) = count(parse_block(file_size), block_count)(bytes)?;
+        // Remove any blocks whose `address` is not referenced by any other
+        // blocks' `next_block_address`
+        //
+        // This is specifically to remove any blocks that might have been
+        // accidentally parsed from garbage data. While it's extremely unlikely
+        // to occur in a real HPS file, better safe than sorry.
+        let valid_block_offsets = std::iter::once(DSP_BLOCK_SECTION_OFFSET)
+            .chain(blocks.iter().map(|b| b.next_block_address))
+            .collect::<HashSet<_>>();
+        blocks.retain(|b| valid_block_offsets.contains(&b.address));
 
         let loop_block_index = blocks.last().and_then(|last_block| {
             blocks
@@ -167,7 +170,7 @@ impl Hps {
         decoder_state: &DSPDecoderState,
         coefficients: &[(i16, i16)],
     ) -> Vec<i16> {
-        let sample_count = frames.len() * 14;
+        let sample_count = frames.len() * FRAME_SAMPLE_COUNT;
         let mut samples: Vec<i16> = Vec::with_capacity(sample_count);
 
         let mut hist1 = decoder_state.initial_hist_1;
@@ -206,8 +209,9 @@ impl Hps {
 pub struct ChannelInfo {
     pub largest_block_length: u32,
     pub sample_count: u32,
-    pub coefficients: Vec<(i16, i16)>,
+    pub coefficients: [(i16, i16); CHANNEL_COEFFICIENT_PAIR_COUNT],
 }
+
 /// The audio data contained in an [`Hps`] is split into multiple "blocks", each
 /// containing [`Frame`]s of encoded samples as well as a link to the start of the
 /// next block.
@@ -260,26 +264,6 @@ fn clamp_i16(val: i32) -> i16 {
     }
 }
 
-fn read_i16(bytes: &[u8], offset: usize) -> i16 {
-    let size = (i16::BITS / 8) as usize;
-    let end: usize = offset + size;
-    i16::from_be_bytes(
-        bytes[offset..end]
-            .try_into()
-            .unwrap_or_else(|_| unreachable!()),
-    )
-}
-
-fn read_u32(bytes: &[u8], offset: usize) -> u32 {
-    let size = (u32::BITS / 8) as usize;
-    let end: usize = offset + size;
-    u32::from_be_bytes(
-        bytes[offset..end]
-            .try_into()
-            .unwrap_or_else(|_| unreachable!()),
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -323,6 +307,17 @@ mod tests {
     }
 
     #[test]
+    fn parses_last_block_even_if_its_very_short() {
+        let hps: Hps = std::fs::read("test-data/short-last-block-with-loop.hps")
+            .unwrap()
+            .try_into()
+            .unwrap();
+
+        assert_eq!(hps.blocks.len(), 8);
+        assert!(hps.loop_block_index.is_some());
+    }
+
+    #[test]
     fn reads_metadata_correctly() {
         let hps: Hps = std::fs::read("test-data/test-song.hps")
             .unwrap()
@@ -335,7 +330,7 @@ mod tests {
             ChannelInfo {
                 largest_block_length: 65536,
                 sample_count: 2874134,
-                coefficients: vec![
+                coefficients: [
                     (492, -294),
                     (2389, -1166),
                     (1300, 135),
@@ -352,7 +347,7 @@ mod tests {
             ChannelInfo {
                 largest_block_length: 65536,
                 sample_count: 2874134,
-                coefficients: vec![
+                coefficients: [
                     (411, -287),
                     (2359, -1100),
                     (1247, 143),
