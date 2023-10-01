@@ -80,7 +80,7 @@ _Length: 0x20_
 | ------ | --------------------- | ---- | ------ | -------------------------------------------------------------------------- |
 | 0x00   | DSP Data Length       | u32  | 0x04   | Length of non-header data contained within the block: `blockLength - 0x20` |
 | 0x04   | (Unknown)             | u32  | 0x04   | Often 0xFFFF, but not always                                               |
-| 0x08   | Pointer to Next Block | u32  | 0x04   | Address of the next block to read (offset from the start of the file)      |
+| 0x08   | Pointer to Next Block | u32  | 0x04   | Offset of the next block to read (offset from the start of the file)      |
 
 ### DSP Decoder State
 

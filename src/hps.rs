@@ -64,21 +64,21 @@ impl TryFrom<&[u8]> for Hps {
         // Parse the rest of the file as DSP blocks
         let (_, mut blocks) = many0(parse_block(file_size))(bytes)?;
 
-        // Remove any blocks whose `address` is not referenced by any other
-        // blocks' `next_block_address`
+        // Remove any blocks whose `offset` is not referenced by any other
+        // blocks' `next_block_offset`
         //
         // This is specifically to remove any blocks that might have been
         // accidentally parsed from garbage data. While it's extremely unlikely
         // to occur in a real HPS file, better safe than sorry.
         let valid_block_offsets = std::iter::once(DSP_BLOCK_SECTION_OFFSET)
-            .chain(blocks.iter().map(|b| b.next_block_address))
+            .chain(blocks.iter().map(|b| b.next_block_offset))
             .collect::<HashSet<_>>();
-        blocks.retain(|b| valid_block_offsets.contains(&b.address));
+        blocks.retain(|b| valid_block_offsets.contains(&b.offset));
 
         let loop_block_index = blocks.last().and_then(|last_block| {
             blocks
                 .iter()
-                .position(|block| block.address == last_block.next_block_address)
+                .position(|block| block.offset == last_block.next_block_offset)
         });
 
         Ok(Hps {
@@ -196,9 +196,9 @@ pub struct ChannelInfo {
 /// left audio channel, and other half are for the right.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Block {
-    pub address: u32,
+    pub offset: u32,
     pub dsp_data_length: u32,
-    pub next_block_address: u32,
+    pub next_block_offset: u32,
     pub decoder_states: [DSPDecoderState; 2],
     pub frames: Vec<Frame>,
 }
@@ -273,12 +273,12 @@ mod tests {
             .try_into()
             .unwrap();
         let block_count = hps.blocks.len();
-        let unique_block_start_addresses = hps
+        let unique_block_offsets = hps
             .blocks
             .iter()
-            .map(|block| block.address)
+            .map(|block| block.offset)
             .collect::<HashSet<_>>();
-        let unique_block_count = unique_block_start_addresses.len();
+        let unique_block_count = unique_block_offsets.len();
         assert_eq!(block_count, unique_block_count);
     }
 

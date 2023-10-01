@@ -52,12 +52,12 @@ pub(crate) fn parse_channel_info(bytes: &[u8]) -> IResult<&[u8], ChannelInfo> {
 
 pub(crate) fn parse_block(file_size: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Block> {
     move |bytes: &[u8]| {
-        let address = file_size - bytes.len();
+        let offset = file_size - bytes.len();
         let (bytes, dsp_data_length) = be_u32(bytes)?;
         let frame_count = dsp_data_length as usize / 8;
 
         let (bytes, _) = take(4usize)(bytes)?;
-        let (bytes, next_block_address) = be_u32(bytes)?;
+        let (bytes, next_block_offset) = be_u32(bytes)?;
         let (bytes, left_decoder_state) = parse_dsp_decoder_state(bytes)?;
         let (bytes, right_decoder_state) = parse_dsp_decoder_state(bytes)?;
         let (bytes, _) = take(4usize)(bytes)?;
@@ -66,9 +66,9 @@ pub(crate) fn parse_block(file_size: usize) -> impl FnMut(&[u8]) -> IResult<&[u8
         Ok((
             bytes,
             Block {
-                address: address as u32,
+                offset: offset as u32,
                 dsp_data_length,
-                next_block_address,
+                next_block_offset,
                 decoder_states: [left_decoder_state, right_decoder_state],
                 frames,
             },
