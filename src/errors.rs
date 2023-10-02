@@ -1,6 +1,8 @@
 use nom::{error::ErrorKind, Needed};
 use thiserror::Error;
 
+use crate::hps::COEFFICIENT_PAIRS_PER_CHANNEL;
+
 pub(crate) type NomByteInputError<'a> = nom::Err<nom::error::Error<&'a [u8]>>;
 
 #[derive(Error, Debug)]
@@ -28,4 +30,10 @@ impl From<NomByteInputError<'_>> for HpsParseError {
             nom::Err::Failure(e) => HpsParseError::InvalidData(e.code, e.input.into()),
         }
     }
+}
+
+#[derive(Error, Debug)]
+pub enum HpsDecodeError {
+    #[error("One of the DSP block frame headers contains a coefficient index of {} which is invalid. Length of the coefficients array is {}", .0, COEFFICIENT_PAIRS_PER_CHANNEL)]
+    InvalidCoefficientIndex(usize),
 }

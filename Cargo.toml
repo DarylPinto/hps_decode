@@ -1,6 +1,6 @@
 [package]
 name = "hps_decode"
-description = "A library for decoding Super Smash Bros. Melee music files"
+description = "A library for parsing and decoding Super Smash Bros. Melee music files"
 version = "0.1.1"
 edition = "2021"
 license = "MIT"

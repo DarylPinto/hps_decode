@@ -9,7 +9,7 @@ use nom::{
 };
 
 use crate::errors::{HpsParseError, NomByteInputError};
-use crate::hps::{Block, ChannelInfo, DSPDecoderState, Frame, CHANNEL_COEFFICIENT_PAIR_COUNT};
+use crate::hps::{Block, ChannelInfo, DSPDecoderState, Frame, COEFFICIENT_PAIRS_PER_CHANNEL};
 
 pub(crate) fn parse_file_header(bytes: &[u8]) -> Result<(&[u8], (u32, u32)), HpsParseError> {
     use HpsParseError::*;
@@ -32,7 +32,7 @@ pub(crate) fn parse_channel_info(bytes: &[u8]) -> IResult<&[u8], ChannelInfo> {
     let (bytes, sample_count) = be_u32(bytes)?;
     let (bytes, _) = take(4usize)(bytes)?;
     let (bytes, coefficients) =
-        count(tuple((be_i16, be_i16)), CHANNEL_COEFFICIENT_PAIR_COUNT)(bytes)?;
+        count(tuple((be_i16, be_i16)), COEFFICIENT_PAIRS_PER_CHANNEL)(bytes)?;
     let (bytes, _dsp_decoder_state) = take(8usize)(bytes)?;
 
     Ok((

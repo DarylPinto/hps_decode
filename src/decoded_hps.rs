@@ -1,30 +1,37 @@
-//! Contains [`PcmIterator`] for iterating over decoded PCM samples. For looping songs, this is an _infinite_ iterator.
+//! Contains [`DecodedHps`] for iterating over decoded PCM samples. For looping songs, this is an _infinite_ iterator.
 //!
-//! To create a [`PcmIterator`] from an [`Hps`], you can use `.into()`:
+//! # Getting a vec of PCM samples
+//! 
+//! If you'd like to get a vec of the underlying PCM samples, use
+//! [`.samples()`](DecodedHps::samples) to get the PCM samples as a slice, then
+//! collect them into a vec:
 //! ```
 //! let hps: Hps = std::fs::read("./respect-your-elders.hps")?.try_into()?;
-//! let pcm: PcmIterator = hps.into();
-//!
-//! // For looping songs, this will go on forever:
-//! for sample in pcm {
-//!     println!("{sample}");
-//! }
+//! let audio: DecodedHps = hps.decode()?;
+//! 
+//! let samples: Vec<i16> = audio.samples()
+//!    .into_iter()
+//!    .cloned()
+//!    .collect::<Vec<_>>();
+//! 
+//! assert_eq!(samples.len(), 6_415_472);
 //! ```
 
-use crate::hps::Hps;
+use crate::hps::{Hps, SAMPLES_PER_FRAME};
 
 /// An iterator over decoded PCM samples.
 ///
-/// For general usage, see the [module-level documentation.](crate::pcm_iterator)
-pub struct PcmIterator {
+/// For general usage, see the [module-level documentation.](crate::decoded_hps)
+#[derive(Debug, Clone, PartialEq)]
+pub struct DecodedHps {
     samples: Vec<i16>,
     current_index: usize,
     loop_sample_index: Option<usize>,
-    pub sample_rate: u32,
-    pub channel_count: u32,
+    sample_rate: u32,
+    channel_count: u32,
 }
 
-impl Iterator for PcmIterator {
+impl Iterator for DecodedHps {
     type Item = i16;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -46,15 +53,14 @@ impl Iterator for PcmIterator {
     }
 }
 
-impl From<Hps> for PcmIterator {
-    fn from(hps: Hps) -> Self {
-        let samples = hps.decode();
-
+impl DecodedHps {
+    pub(crate) fn new(hps: &Hps, samples: Vec<i16>) -> Self {
         let loop_sample_index = hps.loop_block_index.map(|index| {
-            hps.blocks[0..index]
+            hps.blocks[..index]
                 .iter()
-                .map(|b| b.frames.len() * 14)
+                .map(|b| b.frames.len())
                 .sum::<usize>()
+                * SAMPLES_PER_FRAME
         });
 
         Self {
@@ -65,10 +71,15 @@ impl From<Hps> for PcmIterator {
             channel_count: hps.channel_count,
         }
     }
+
+    /// Get the underlying decoded PCM samples as a slice.
+    pub fn samples<'a>(&'a self) -> &'a [i16] {
+        &self.samples
+    }
 }
 
 #[cfg(feature = "rodio-source")]
-impl rodio::Source for PcmIterator {
+impl rodio::Source for DecodedHps {
     fn current_frame_len(&self) -> Option<usize> {
         None
     }

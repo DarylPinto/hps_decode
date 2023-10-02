@@ -1,6 +1,6 @@
 //! Contains [`Hps`] for representing the contents of an `.hps` file in a structured format.
 //!
-//! To convert raw binary data from an `.hps` file into an [`Hps`], you can use `.try_into()`:
+//! To parse raw binary data from an `.hps` file into an [`Hps`], you can use `.try_into()`:
 //!
 //! ```
 //! let hps: Hps = std::fs::read("./respect-your-elders.hps")?.try_into()?;
@@ -8,27 +8,32 @@
 //! assert_eq!(hps.channel_count, 2);
 //! ```
 //!
-//! # Decoding into PCM samples
-//! To decode an [`Hps`] into PCM samples, you can use the [`decode`](Hps::decode) method:
+//! # Decoding into audio
+//! To decode an [`Hps`] into audio, you can use the [`.decode()`](Hps::decode)
+//! method:
 //! ```
-//! let samples: Vec<i16> = hps.decode();
-//! assert_eq!(samples.len(), 6_415_472);
-//! ```
+//! let audio = hps.decode()?;
 //!
-//! If you'd like to get an _infinite_ iterator for a looping song, take a look at the
-//! [pcm_iterator](crate::pcm_iterator) module.
+//! // For looping songs, this will go on forever:
+//! for sample in audio {
+//!     println!("{sample}");
+//! }
+//! ```
+//! If you’d like to get the underlying PCM samples as a vec, check out the
+//! [`decoded_hps`](crate::decoded_hps) module.
 
 use std::collections::HashSet;
 
 use nom::multi::many0;
 use rayon::prelude::*;
 
-use crate::errors::HpsParseError;
+use crate::errors::{HpsDecodeError, HpsParseError};
 use crate::parsers::{parse_block, parse_channel_info, parse_file_header};
+use crate::decoded_hps::DecodedHps;
 
 const DSP_BLOCK_SECTION_OFFSET: u32 = 0x80;
-const FRAME_SAMPLE_COUNT: usize = 14;
-pub(crate) const CHANNEL_COEFFICIENT_PAIR_COUNT: usize = 8;
+pub(crate) const SAMPLES_PER_FRAME: usize = 14;
+pub(crate) const COEFFICIENT_PAIRS_PER_CHANNEL: usize = 8;
 
 /// A container for HPS file data.
 ///
@@ -108,12 +113,13 @@ impl TryFrom<&Vec<u8>> for Hps {
 }
 
 impl Hps {
-    /// Decode an [`Hps`] into a vector of PCM samples. If you'd like to get an
-    /// _infinite_ iterator for a looping song, take a look at the [pcm_iterator](crate::pcm_iterator) module.
-    pub fn decode(&self) -> Vec<i16> {
-        self.blocks
+    /// Decode an [`Hps`] into audio. See the [module-level
+    /// documentation](crate::hps) for more information.
+    pub fn decode(&self) -> Result<DecodedHps, HpsDecodeError> {
+        let samples = self
+            .blocks
             .par_iter()
-            .flat_map(|block| {
+            .map(|block| {
                 // The first half of the frames in the block are for the left
                 // audio channel, and the other half are for the right
                 let half_index = block.frames.len() / 2;
@@ -123,21 +129,27 @@ impl Hps {
                     &block.frames[..half_index],
                     &block.decoder_states[0],
                     &self.channel_info[0].coefficients,
-                );
+                )?;
+
                 let right_samples = Self::decode_frames(
                     &block.frames[half_index..],
                     &block.decoder_states[1],
                     &self.channel_info[1].coefficients,
-                );
+                )?;
 
                 // Interleave the samples with each other
-                left_samples
+                Ok(left_samples
                     .into_iter()
                     .zip(right_samples)
                     .flat_map(|(left_sample, right_sample)| [left_sample, right_sample])
-                    .collect::<Vec<_>>()
+                    .collect::<Vec<_>>())
             })
-            .collect::<Vec<_>>()
+            .collect::<Result<Vec<Vec<_>>, HpsDecodeError>>()?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        Ok(DecodedHps::new(self, samples))
     }
 
     /// Decode a slice of DSP block frames into samples
@@ -145,16 +157,19 @@ impl Hps {
         frames: &[Frame],
         decoder_state: &DSPDecoderState,
         coefficients: &[(i16, i16)],
-    ) -> Vec<i16> {
-        let sample_count = frames.len() * FRAME_SAMPLE_COUNT;
+    ) -> Result<Vec<i16>, HpsDecodeError> {
+        let sample_count = frames.len() * SAMPLES_PER_FRAME;
         let mut samples: Vec<i16> = Vec::with_capacity(sample_count);
 
         let mut hist1 = decoder_state.initial_hist_1;
         let mut hist2 = decoder_state.initial_hist_2;
 
-        frames.iter().for_each(|frame| {
+        for frame in frames {
             let scale = 1 << (frame.header & 0xF);
             let coef_index = (frame.header >> 4) as usize;
+            if coef_index >= COEFFICIENT_PAIRS_PER_CHANNEL {
+                return Err(HpsDecodeError::InvalidCoefficientIndex(coef_index));
+            }
             let (coef1, coef2) = coefficients[coef_index];
 
             frame
@@ -173,9 +188,9 @@ impl Hps {
                     hist1 = sample;
                     samples.push(sample);
                 });
-        });
+        }
 
-        samples
+        Ok(samples)
     }
 }
 
@@ -185,7 +200,7 @@ impl Hps {
 pub struct ChannelInfo {
     pub largest_block_length: u32,
     pub sample_count: u32,
-    pub coefficients: [(i16, i16); CHANNEL_COEFFICIENT_PAIR_COUNT],
+    pub coefficients: [(i16, i16); COEFFICIENT_PAIRS_PER_CHANNEL],
 }
 
 /// The audio data contained in an [`Hps`] is split into multiple "blocks", each
@@ -251,9 +266,11 @@ mod tests {
             .unwrap()
             .try_into()
             .unwrap();
-        let decoded = hps.decode();
-        let decoded_bytes = decoded
-            .iter()
+        let decoded_bytes = hps
+            .decode()
+            .unwrap()
+            .samples()
+            .into_iter()
             .flat_map(|sample| sample.to_be_bytes())
             .collect::<Vec<_>>();
 
@@ -291,6 +308,19 @@ mod tests {
 
         assert_eq!(hps.blocks.len(), 8);
         assert!(hps.loop_block_index.is_some());
+    }
+
+    #[test]
+    fn properly_handles_invalid_coefficient_index() {
+        let hps: Hps = std::fs::read("test-data/corrupt-dsp-frame-header.hps")
+            .unwrap()
+            .try_into()
+            .unwrap();
+
+        assert!(matches!(
+            hps.decode().unwrap_err(),
+            HpsDecodeError::InvalidCoefficientIndex(..)
+        ));
     }
 
     #[test]
