@@ -27,9 +27,9 @@ use std::collections::HashSet;
 use nom::multi::many0;
 use rayon::prelude::*;
 
+use crate::decoded_hps::DecodedHps;
 use crate::errors::{HpsDecodeError, HpsParseError};
 use crate::parsers::{parse_block, parse_channel_info, parse_file_header};
-use crate::decoded_hps::DecodedHps;
 
 const DSP_BLOCK_SECTION_OFFSET: u32 = 0x80;
 pub(crate) const SAMPLES_PER_FRAME: usize = 14;
@@ -258,7 +258,6 @@ fn clamp_i16(val: i32) -> i16 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
 
     #[test]
     fn decodes_blocks_correctly() {

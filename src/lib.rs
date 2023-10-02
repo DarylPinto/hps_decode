@@ -18,7 +18,7 @@
 //!     // Play the song with the rodio library
 //!     let (_stream, stream_handle) = OutputStream::try_default()?;
 //!     let sink = Sink::try_new(&stream_handle)?;
-//! 
+//!
 //!     sink.append(audio);
 //!     sink.play();
 //!     sink.sleep_until_end();
@@ -36,5 +36,5 @@ mod parsers;
 
 pub use hps::Hps;
 
-pub mod hps;
 pub mod decoded_hps;
+pub mod hps;

@@ -1,19 +1,19 @@
 //! Contains [`DecodedHps`] for iterating over decoded PCM samples. For looping songs, this is an _infinite_ iterator.
 //!
 //! # Getting a vec of PCM samples
-//! 
+//!
 //! If you'd like to get a vec of the underlying PCM samples, use
 //! [`.samples()`](DecodedHps::samples) to get the PCM samples as a slice, then
 //! collect them into a vec:
 //! ```
 //! let hps: Hps = std::fs::read("./respect-your-elders.hps")?.try_into()?;
 //! let audio: DecodedHps = hps.decode()?;
-//! 
+//!
 //! let samples: Vec<i16> = audio.samples()
 //!    .into_iter()
 //!    .cloned()
-//!    .collect::<Vec<_>>();
-//! 
+//!    .collect();
+//!
 //! assert_eq!(samples.len(), 6_415_472);
 //! ```
 
@@ -73,7 +73,7 @@ impl DecodedHps {
     }
 
     /// Get the underlying decoded PCM samples as a slice.
-    pub fn samples<'a>(&'a self) -> &'a [i16] {
+    pub fn samples(&self) -> &[i16] {
         &self.samples
     }
 }
