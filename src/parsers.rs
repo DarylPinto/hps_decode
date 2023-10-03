@@ -19,8 +19,8 @@ pub(crate) fn parse_file_header(bytes: &[u8]) -> Result<(&[u8], (u32, u32)), Hps
     let (bytes, sample_rate) = be_u32(bytes)?;
     let (bytes, channel_count) = be_u32(bytes)?;
 
-    if channel_count != 2 {
-        return Err(UnsupportedChannelCount(channel_count));
+    if channel_count == 0 {
+        return Err(ZeroAudioChannels);
     }
 
     Ok((bytes, (sample_rate, channel_count)))
@@ -50,7 +50,10 @@ pub(crate) fn parse_channel_info(bytes: &[u8]) -> IResult<&[u8], ChannelInfo> {
     ))
 }
 
-pub(crate) fn parse_block(file_size: usize) -> impl FnMut(&[u8]) -> IResult<&[u8], Block> {
+pub(crate) fn parse_block(
+    file_size: usize,
+    channel_count: usize,
+) -> impl FnMut(&[u8]) -> IResult<&[u8], Block> {
     move |bytes: &[u8]| {
         let offset = file_size - bytes.len();
         let (bytes, dsp_data_length) = be_u32(bytes)?;
@@ -58,8 +61,7 @@ pub(crate) fn parse_block(file_size: usize) -> impl FnMut(&[u8]) -> IResult<&[u8
 
         let (bytes, _) = take(4usize)(bytes)?;
         let (bytes, next_block_offset) = be_u32(bytes)?;
-        let (bytes, left_decoder_state) = parse_dsp_decoder_state(bytes)?;
-        let (bytes, right_decoder_state) = parse_dsp_decoder_state(bytes)?;
+        let (bytes, decoder_states) = count(parse_dsp_decoder_state, channel_count)(bytes)?;
         let (bytes, _) = take(4usize)(bytes)?;
         let (bytes, frames) = count(parse_frame, frame_count)(bytes)?;
 
@@ -69,7 +71,7 @@ pub(crate) fn parse_block(file_size: usize) -> impl FnMut(&[u8]) -> IResult<&[u8
                 offset: offset as u32,
                 dsp_data_length,
                 next_block_offset,
-                decoder_states: [left_decoder_state, right_decoder_state],
+                decoder_states,
                 frames,
             },
         ))

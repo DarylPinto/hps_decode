@@ -33,6 +33,7 @@
 
 mod errors;
 mod parsers;
+mod types;
 
 pub use hps::Hps;
 

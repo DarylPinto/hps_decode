@@ -11,9 +11,8 @@ pub enum HpsParseError {
     #[error("Invalid magic number. Expected ' HALPST\0'")]
     InvalidMagicNumber,
 
-    /// The number of audio channels in the provided file is not supported by the library
-    #[error("Only stereo is supported, but the provided file has {0} audio channel(s)")]
-    UnsupportedChannelCount(u32),
+    #[error("The file has zero audio channels")]
+    ZeroAudioChannels,
 
     #[error("There was not enough data, {0:?} more bytes were needed")]
     Incomplete(Needed),
@@ -36,4 +35,10 @@ impl From<NomByteInputError<'_>> for HpsParseError {
 pub enum HpsDecodeError {
     #[error("One of the DSP block frame headers contains a coefficient index of {} which is invalid. Length of the coefficients array is {}", .0, COEFFICIENT_PAIRS_PER_CHANNEL)]
     InvalidCoefficientIndex(usize),
+
+    #[error("One of the DSP blocks has {frame_count} frames which is invalid for this file, as it has {channel_count} audio channels")]
+    InvalidBlockSize {
+        frame_count: usize,
+        channel_count: usize,
+    },
 }

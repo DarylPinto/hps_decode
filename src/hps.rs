@@ -24,14 +24,16 @@
 
 use std::collections::HashSet;
 
-use nom::multi::many0;
+use nom::multi::{count, many0};
 use rayon::prelude::*;
 
 use crate::decoded_hps::DecodedHps;
 use crate::errors::{HpsDecodeError, HpsParseError};
 use crate::parsers::{parse_block, parse_channel_info, parse_file_header};
+use crate::types::InterleavingIterator;
 
-const DSP_BLOCK_SECTION_OFFSET: u32 = 0x80;
+const FILE_HEADER_SIZE: u32 = 0x10;
+const CHANNEL_INFO_SIZE: u32 = 0x38;
 pub(crate) const SAMPLES_PER_FRAME: usize = 14;
 pub(crate) const COEFFICIENT_PAIRS_PER_CHANNEL: usize = 8;
 
@@ -45,7 +47,7 @@ pub struct Hps {
     /// Number of audio channels
     pub channel_count: u32,
     /// Information about the audio channels
-    pub channel_info: [ChannelInfo; 2],
+    pub channel_info: Vec<ChannelInfo>,
     /// DSP Block data
     pub blocks: Vec<Block>,
     /// Index of the block to loop back to when the track ends. `None` if the track doesn't loop
@@ -59,15 +61,10 @@ impl TryFrom<&[u8]> for Hps {
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         let file_size = bytes.len();
 
-        // File Header
+        // Parse bytes
         let (bytes, (sample_rate, channel_count)) = parse_file_header(bytes)?;
-
-        // Left and Right Channel Information
-        let (bytes, left_channel_info) = parse_channel_info(bytes)?;
-        let (bytes, right_channel_info) = parse_channel_info(bytes)?;
-
-        // Parse the rest of the file as DSP blocks
-        let (_, mut blocks) = many0(parse_block(file_size))(bytes)?;
+        let (bytes, channel_info) = count(parse_channel_info, channel_count as usize)(bytes)?;
+        let (_, mut blocks) = many0(parse_block(file_size, channel_count as usize))(bytes)?;
 
         // Remove any blocks whose `offset` is not referenced by any other
         // blocks' `next_block_offset`
@@ -75,7 +72,8 @@ impl TryFrom<&[u8]> for Hps {
         // This is specifically to remove any blocks that might have been
         // accidentally parsed from garbage data. While it's extremely unlikely
         // to occur in a real HPS file, better safe than sorry.
-        let valid_block_offsets = std::iter::once(DSP_BLOCK_SECTION_OFFSET)
+        let dsp_block_section_offset = FILE_HEADER_SIZE + (channel_count * CHANNEL_INFO_SIZE);
+        let valid_block_offsets = std::iter::once(dsp_block_section_offset)
             .chain(blocks.iter().map(|b| b.next_block_offset))
             .collect::<HashSet<_>>();
         blocks.retain(|b| valid_block_offsets.contains(&b.offset));
@@ -89,7 +87,7 @@ impl TryFrom<&[u8]> for Hps {
         Ok(Hps {
             sample_rate,
             channel_count,
-            channel_info: [left_channel_info, right_channel_info],
+            channel_info,
             blocks,
             loop_block_index,
         })
@@ -119,37 +117,43 @@ impl Hps {
         let samples = self
             .blocks
             .par_iter()
-            .map(|block| {
-                // The first half of the frames in the block are for the left
-                // audio channel, and the other half are for the right
-                let half_index = block.frames.len() / 2;
-
-                // Decode the samples for the left and right audio channels
-                let left_samples = Self::decode_frames(
-                    &block.frames[..half_index],
-                    &block.decoder_states[0],
-                    &self.channel_info[0].coefficients,
-                )?;
-
-                let right_samples = Self::decode_frames(
-                    &block.frames[half_index..],
-                    &block.decoder_states[1],
-                    &self.channel_info[1].coefficients,
-                )?;
-
-                // Interleave the samples with each other
-                Ok(left_samples
-                    .into_iter()
-                    .zip(right_samples)
-                    .flat_map(|(left_sample, right_sample)| [left_sample, right_sample])
-                    .collect::<Vec<_>>())
-            })
+            .map(|block| Self::decode_block(self, block))
             .collect::<Result<Vec<Vec<_>>, HpsDecodeError>>()?
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
 
         Ok(DecodedHps::new(self, samples))
+    }
+
+    /// Decode a single DSP block into samples
+    fn decode_block(hps: &Hps, block: &Block) -> Result<Vec<i16>, HpsDecodeError> {
+        let frame_count = block.frames.len();
+        let channel_count = hps.channel_count as usize;
+        let slice_size = frame_count / channel_count;
+
+        if frame_count % channel_count != 0 {
+            return Err(HpsDecodeError::InvalidBlockSize {
+                frame_count,
+                channel_count,
+            });
+        }
+
+        let slices = (0..channel_count)
+            .map(|channel_index| {
+                let start = channel_index * slice_size;
+                let end = (channel_index + 1) * slice_size;
+
+                Self::decode_frames(
+                    &block.frames[start..end],
+                    &block.decoder_states[channel_index],
+                    &hps.channel_info[channel_index].coefficients,
+                )
+            })
+            .collect::<Result<_, _>>()?;
+
+        // Interleave the samples with each other
+        Ok(InterleavingIterator::new(slices).collect::<Vec<_>>())
     }
 
     /// Decode a slice of DSP block frames into samples
@@ -214,7 +218,7 @@ pub struct Block {
     pub offset: u32,
     pub dsp_data_length: u32,
     pub next_block_offset: u32,
-    pub decoder_states: [DSPDecoderState; 2],
+    pub decoder_states: Vec<DSPDecoderState>,
     pub frames: Vec<Frame>,
 }
 
