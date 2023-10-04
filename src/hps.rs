@@ -141,10 +141,9 @@ impl Hps {
                 Ok(left_samples
                     .into_iter()
                     .zip(right_samples)
-                    .flat_map(|(left_sample, right_sample)| [left_sample, right_sample])
-                    .collect::<Vec<_>>())
+                    .flat_map(|(left_sample, right_sample)| [left_sample, right_sample]))
             })
-            .collect::<Result<Vec<Vec<_>>, HpsDecodeError>>()?
+            .collect::<Result<Vec<_>, HpsDecodeError>>()?
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
