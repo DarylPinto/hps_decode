@@ -19,7 +19,7 @@
 
 use crate::hps::{Hps, SAMPLES_PER_FRAME};
 
-/// An iterator over decoded PCM samples.
+/// An iterator over decoded PCM samples. For looping songs, this is an _infinite_ iterator.
 ///
 /// For general usage, see the [module-level documentation.](crate::decoded_hps)
 #[derive(Debug, Clone, PartialEq)]
@@ -73,8 +73,21 @@ impl DecodedHps {
     }
 
     /// Get the underlying decoded PCM samples as a slice.
+    #[must_use]
     pub fn samples(&self) -> &[i16] {
         &self.samples
+    }
+
+    /// Returns `true` if the song loops.
+    pub fn is_looping(&self) -> bool {
+        self.loop_sample_index.is_some()
+    }
+
+    /// Returns the total duration of the song.
+    pub fn duration(&self) -> std::time::Duration {
+        let sample_count = self.samples.len() as u64;
+        let samples_per_second = (self.sample_rate * self.channel_count) as u64;
+        std::time::Duration::from_millis(1000 * sample_count / samples_per_second)
     }
 }
 
@@ -90,6 +103,10 @@ impl rodio::Source for DecodedHps {
         self.sample_rate
     }
     fn total_duration(&self) -> Option<std::time::Duration> {
-        None
+        if self.is_looping() {
+            None
+        } else {
+            Some(self.duration())
+        }
     }
 }

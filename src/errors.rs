@@ -25,19 +25,21 @@ impl From<NomByteInputError<'_>> for HpsParseError {
     fn from(error: NomByteInputError<'_>) -> Self {
         match error {
             nom::Err::Incomplete(needed) => HpsParseError::Incomplete(needed),
-            nom::Err::Error(e) => HpsParseError::InvalidData(e.code, e.input.into()),
-            nom::Err::Failure(e) => HpsParseError::InvalidData(e.code, e.input.into()),
+            nom::Err::Error(e) | nom::Err::Failure(e) => {
+                HpsParseError::InvalidData(e.code, e.input.into())
+            }
         }
     }
 }
 
 #[derive(Error, Debug)]
 pub enum HpsDecodeError {
-    #[error("One of the DSP block frame headers contains a coefficient index of {} which is invalid. Length of the coefficients array is {}", .0, COEFFICIENT_PAIRS_PER_CHANNEL)]
+    #[error("One of the audio frame headers contains a coefficient index of {0} which is invalid. Length of the coefficients array is {COEFFICIENT_PAIRS_PER_CHANNEL}")]
     InvalidCoefficientIndex(usize),
 
-    #[error("One of the DSP blocks has {frame_count} frames which is invalid for this file, as it has {channel_count} audio channels")]
+    #[error("This file has {channel_count} audio channels, but the block at index {block_index} has {frame_count} frames. {frame_count} is not a multiple of {channel_count}")]
     InvalidBlockSize {
+        block_index: usize,
         frame_count: usize,
         channel_count: usize,
     },

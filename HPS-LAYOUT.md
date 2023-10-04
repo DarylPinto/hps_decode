@@ -44,11 +44,11 @@ the song, and the number of
 
 _Length: 0x10_
 
-| Offset | Name          | Type    | Length | Description                                                                                          |
-| ------ | ------------- | ------- | ------ | ---------------------------------------------------------------------------------------------------- |
-| 0x00   | Magic String  | [u8; 8] | 0x08   | " HALPST\0" [magic string](<https://en.wikipedia.org/wiki/Magic_number_(programming)>)               |
-| 0x08   | Sample Rate   | u32     | 0x04   | Number of [samples](https://docs.rs/rodio/latest/rodio/source/trait.Source.html#sampling) per second |
-| 0x0C   | Channel Count | u32     | 0x04   | Number of [audio channels](https://docs.rs/rodio/latest/rodio/source/trait.Source.html#channels)     |
+| Offset | Name          | Type    | Length | Description                                                                                                      |
+| ------ | ------------- | ------- | ------ | ---------------------------------------------------------------------------------------------------------------- |
+| 0x00   | Magic String  | [u8; 8] | 0x08   | " HALPST\0" [magic string](<https://en.wikipedia.org/wiki/Magic_number_(programming)>)                           |
+| 0x08   | Sample Rate   | u32     | 0x04   | Number of [samples](https://docs.rs/rodio/latest/rodio/source/trait.Source.html#sampling) per channel per second |
+| 0x0C   | Channel Count | u32     | 0x04   | Number of [audio channels](https://docs.rs/rodio/latest/rodio/source/trait.Source.html#channels)                 |
 
 ### Channel Info
 
@@ -80,7 +80,7 @@ _Length: 0x20_
 | ------ | --------------------- | ---- | ------ | -------------------------------------------------------------------------- |
 | 0x00   | DSP Data Length       | u32  | 0x04   | Length of non-header data contained within the block: `blockLength - 0x20` |
 | 0x04   | (Unknown)             | u32  | 0x04   | Often 0xFFFF, but not always                                               |
-| 0x08   | Pointer to Next Block | u32  | 0x04   | Offset of the next block to read (offset from the start of the file)      |
+| 0x08   | Pointer to Next Block | u32  | 0x04   | Offset of the next block to read (offset from the start of the file)       |
 
 ### DSP Decoder State
 

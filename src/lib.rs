@@ -32,8 +32,8 @@
 //! [see here.](https://github.com/DarylPinto/hps_decode/blob/main/HPS-LAYOUT.md)
 
 mod errors;
+mod interleaving_iterator;
 mod parsers;
-mod types;
 
 pub use hps::Hps;
 

@@ -23,14 +23,15 @@
 //! [`decoded_hps`](crate::decoded_hps) module.
 
 use std::collections::HashSet;
+use std::vec;
 
 use nom::multi::{count, many0};
 use rayon::prelude::*;
 
 use crate::decoded_hps::DecodedHps;
 use crate::errors::{HpsDecodeError, HpsParseError};
+use crate::interleaving_iterator::InterleavingIterator;
 use crate::parsers::{parse_block, parse_channel_info, parse_file_header};
-use crate::types::InterleavingIterator;
 
 const FILE_HEADER_SIZE: u32 = 0x10;
 const CHANNEL_INFO_SIZE: u32 = 0x38;
@@ -117,8 +118,9 @@ impl Hps {
         let samples = self
             .blocks
             .par_iter()
-            .map(|block| Self::decode_block(self, block))
-            .collect::<Result<Vec<Vec<_>>, HpsDecodeError>>()?
+            .enumerate()
+            .map(|(i, block)| Self::decode_block(self, block, i))
+            .collect::<Result<Vec<_>, HpsDecodeError>>()?
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
@@ -127,22 +129,27 @@ impl Hps {
     }
 
     /// Decode a single DSP block into samples
-    fn decode_block(hps: &Hps, block: &Block) -> Result<Vec<i16>, HpsDecodeError> {
+    fn decode_block(
+        hps: &Hps,
+        block: &Block,
+        block_index: usize,
+    ) -> Result<InterleavingIterator<vec::IntoIter<i16>>, HpsDecodeError> {
         let frame_count = block.frames.len();
         let channel_count = hps.channel_count as usize;
-        let slice_size = frame_count / channel_count;
+        let section_size = frame_count / channel_count;
 
         if frame_count % channel_count != 0 {
             return Err(HpsDecodeError::InvalidBlockSize {
+                block_index,
                 frame_count,
                 channel_count,
             });
         }
 
-        let slices = (0..channel_count)
+        let sections = (0..channel_count)
             .map(|channel_index| {
-                let start = channel_index * slice_size;
-                let end = (channel_index + 1) * slice_size;
+                let start = channel_index * section_size;
+                let end = (channel_index + 1) * section_size;
 
                 Self::decode_frames(
                     &block.frames[start..end],
@@ -152,8 +159,8 @@ impl Hps {
             })
             .collect::<Result<_, _>>()?;
 
-        // Interleave the samples with each other
-        Ok(InterleavingIterator::new(slices).collect::<Vec<_>>())
+        // Interleave the samples from each section
+        Ok(InterleavingIterator::new(sections))
     }
 
     /// Decode a slice of DSP block frames into samples
@@ -181,7 +188,7 @@ impl Hps {
                 .iter()
                 .flat_map(|&byte| [get_high_nibble(byte), get_low_nibble(byte)])
                 .for_each(|nibble| {
-                    let sample = clamp_i16(
+                    let sample = clamp_to_i16(
                         (((nibble as i32 * scale) << 11)
                             + 1024
                             + (coef1 as i32 * hist1 as i32 + coef2 as i32 * hist2 as i32))
@@ -249,10 +256,10 @@ fn get_high_nibble(byte: u8) -> i8 {
     NIBBLE_TO_I8[((byte >> 4) & 0xF) as usize]
 }
 
-fn clamp_i16(val: i32) -> i16 {
-    if val < (i16::MIN as i32) {
+fn clamp_to_i16(val: i32) -> i16 {
+    if val < i32::from(i16::MIN) {
         i16::MIN
-    } else if val > (i16::MAX as i32) {
+    } else if val > i32::from(i16::MAX) {
         i16::MAX
     } else {
         val as i16

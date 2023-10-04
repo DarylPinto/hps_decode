@@ -12,7 +12,7 @@ use crate::errors::{HpsParseError, NomByteInputError};
 use crate::hps::{Block, ChannelInfo, DSPDecoderState, Frame, COEFFICIENT_PAIRS_PER_CHANNEL};
 
 pub(crate) fn parse_file_header(bytes: &[u8]) -> Result<(&[u8], (u32, u32)), HpsParseError> {
-    use HpsParseError::*;
+    use HpsParseError::{InvalidMagicNumber, ZeroAudioChannels};
 
     let (bytes, _) =
         tag(" HALPST\0")(bytes).map_err(|_: NomByteInputError<'_>| InvalidMagicNumber)?;
