@@ -1,4 +1,7 @@
-//! Contains [`DecodedHps`] for iterating over decoded PCM samples. For looping songs, this is an _infinite_ iterator.
+//! Contains [`DecodedHps`] for iterating over decoded PCM samples. For looping
+//! songs, this is an _infinite_ iterator. While an iterator like this is useful
+//! for audio playback, you may need to access the samples directly for other
+//! kinds of applications.
 //!
 //! # Getting a vec of PCM samples
 //!
@@ -9,11 +12,7 @@
 //! let hps: Hps = std::fs::read("./respect-your-elders.hps")?.try_into()?;
 //! let audio: DecodedHps = hps.decode()?;
 //!
-//! let samples: Vec<i16> = audio.samples()
-//!    .into_iter()
-//!    .cloned()
-//!    .collect();
-//!
+//! let samples: Vec<i16> = audio.samples().to_vec();
 //! assert_eq!(samples.len(), 6_415_472);
 //! ```
 
@@ -27,8 +26,10 @@ pub struct DecodedHps {
     samples: Vec<i16>,
     current_index: usize,
     loop_sample_index: Option<usize>,
-    sample_rate: u32,
-    channel_count: u32,
+    /// Number of samples per second per audio channel
+    pub sample_rate: u32,
+    /// Number of audio channels
+    pub channel_count: u32,
 }
 
 impl Iterator for DecodedHps {
@@ -76,6 +77,18 @@ impl DecodedHps {
     pub fn samples(&self) -> &[i16] {
         &self.samples
     }
+
+    /// Returns `true` if the song loops. If this is the case, it's an _infinite_ iterator.
+    pub fn is_looping(&self) -> bool {
+        self.loop_sample_index.is_some()
+    }
+
+    /// Returns the total duration of the song without any looping.
+    pub fn duration(&self) -> std::time::Duration {
+        let sample_count = self.samples.len() as u64;
+        let samples_per_second = (self.sample_rate * self.channel_count) as u64;
+        std::time::Duration::from_millis(1000 * sample_count / samples_per_second)
+    }
 }
 
 #[cfg(feature = "rodio-source")]
@@ -90,6 +103,10 @@ impl rodio::Source for DecodedHps {
         self.sample_rate
     }
     fn total_duration(&self) -> Option<std::time::Duration> {
-        None
+        if self.is_looping() {
+            None
+        } else {
+            Some(self.duration())
+        }
     }
 }
