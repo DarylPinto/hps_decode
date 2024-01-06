@@ -2,9 +2,17 @@
 //!
 //! # Quick Start
 //!
-//! Here is a quick example of how to play a stereo `.hps` file with the
-//! `rodio-source` feature flag and [rodio 0.17](https://docs.rs/rodio/0.17.1/rodio/index.html):
+//! Playing back a stereo `.hps` file with
+//! [rodio.](https://docs.rs/rodio/0.17.1/rodio/index.html)
 //!
+//! In your `Cargo.toml`:
+//! ```toml
+//! [dependencies]
+//! hps_decode = { version = "0.2.1", features = ["rodio-source"] }
+//! rodio = { version = "0.17.1", default-features = false }
+//! ```
+//!
+//! In your `main.rs`:
 //! ```
 //! use hps_decode::Hps;
 //! use rodio::{OutputStream, Sink};
