@@ -6,7 +6,7 @@ edition = "2021"
 license = "MIT"
 repository = "https://github.com/DarylPinto/hps_decode"
 readme = "README.md"
-exclude = ["/test-data"]
+exclude = ["/test-data", "benches"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -19,5 +19,12 @@ rayon = "1.7.0"
 rodio = { version = "0.17.1", default-features = false, optional = true }
 thiserror = "1.0.40"
 
+[dev-dependencies]
+criterion = { version = "0.5.1", features = ["html_reports"] }
+
 [features]
 rodio-source = ["dep:rodio"]
+
+[[bench]]
+name = "hps_decode"
+harness = false

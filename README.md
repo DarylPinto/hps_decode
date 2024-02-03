@@ -52,6 +52,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 Check out [docs.rs][docs-url] for more details about the library.
 
+## Benchmarking
+
+This library can be benchmarked using [criterion](https://github.com/bheisler/criterion.rs) by running `cargo bench`. Reports with the results will be generated at `target/criterion/report/index.html`
+
 ## .HPS File Layout
 
 For general purpose, language agnostic information about the `.hps` file format,
