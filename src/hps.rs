@@ -24,8 +24,9 @@
 
 use std::collections::HashSet;
 
-use nom::multi::many0;
 use rayon::prelude::*;
+use winnow::prelude::*;
+use winnow::combinator::repeat;
 
 use crate::decoded_hps::DecodedHps;
 use crate::errors::{HpsDecodeError, HpsParseError};
@@ -58,16 +59,17 @@ impl TryFrom<&[u8]> for Hps {
     /// Create an `Hps` from a byte slice
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         let file_size = bytes.len();
+        let mut bytes = bytes;
 
         // File Header
-        let (bytes, (sample_rate, channel_count)) = parse_file_header(bytes)?;
+        let (sample_rate, channel_count) = parse_file_header(&mut bytes)?;
 
         // Left and Right Channel Information
-        let (bytes, left_channel_info) = parse_channel_info(bytes)?;
-        let (bytes, right_channel_info) = parse_channel_info(bytes)?;
+        let left_channel_info = parse_channel_info.parse_next(&mut bytes)?;
+        let right_channel_info = parse_channel_info.parse_next(&mut bytes)?;
 
         // Parse the rest of the file as DSP blocks
-        let (_, mut blocks) = many0(parse_block(file_size))(bytes)?;
+        let mut blocks: Vec<Block> = repeat(1.., parse_block(file_size)).parse_next(&mut bytes)?;
 
         // Remove any blocks whose `offset` is not referenced by any other
         // blocks' `next_block_offset`
@@ -244,6 +246,7 @@ fn get_high_nibble(byte: u8) -> i8 {
     NIBBLE_TO_I8[((byte >> 4) & 0xF) as usize]
 }
 
+#[inline(always)]
 fn clamp_i16(val: i32) -> i16 {
     if val < (i16::MIN as i32) {
         i16::MIN
@@ -264,6 +267,7 @@ mod tests {
             .unwrap()
             .try_into()
             .unwrap();
+
         let decoded_bytes = hps
             .decode()
             .unwrap()

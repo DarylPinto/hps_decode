@@ -1,9 +1,7 @@
-use nom::{error::ErrorKind, Needed};
 use thiserror::Error;
+use winnow::error::{ContextError, ErrMode, StrContext};
 
 use crate::hps::COEFFICIENT_PAIRS_PER_CHANNEL;
-
-pub(crate) type NomByteInputError<'a> = nom::Err<nom::error::Error<&'a [u8]>>;
 
 #[derive(Error, Debug)]
 pub enum HpsParseError {
@@ -16,18 +14,18 @@ pub enum HpsParseError {
     UnsupportedChannelCount(u32),
 
     #[error("There was not enough data, {0:?} more bytes were needed")]
-    Incomplete(Needed),
+    Incomplete(winnow::error::Needed),
 
-    #[error("Tried to parse with {0:?}, but encountered invalid data ({} bytes remaining)", .1.len())]
-    InvalidData(ErrorKind, Vec<u8>),
+    #[error("Tried to parse, but encountered invalid data: ({0:?})")]
+    InvalidData(ContextError<StrContext>),
 }
 
-impl From<NomByteInputError<'_>> for HpsParseError {
-    fn from(error: NomByteInputError<'_>) -> Self {
+impl From<ErrMode<ContextError>> for HpsParseError {
+    fn from(error: ErrMode<ContextError>) -> Self {
         match error {
-            nom::Err::Incomplete(needed) => HpsParseError::Incomplete(needed),
-            nom::Err::Error(e) | nom::Err::Failure(e) => {
-                HpsParseError::InvalidData(e.code, e.input.into())
+            winnow::error::ErrMode::Incomplete(needed) => HpsParseError::Incomplete(needed),
+            winnow::error::ErrMode::Backtrack(e) | winnow::error::ErrMode::Cut(e) => {
+                HpsParseError::InvalidData(e)
             }
         }
     }

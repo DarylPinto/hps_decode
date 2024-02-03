@@ -417,10 +417,10 @@ name = "hps_decode"
 version = "0.2.1"
 dependencies = [
  "criterion",
- "nom",
  "rayon",
  "rodio",
  "thiserror",
+ "winnow",
 ]
 
 [[package]]
@@ -1359,9 +1359,9 @@ checksum = "dff9641d1cd4be8d1a070daf9e3773c5f67e78b4d9d42263020c057706765c04"
 
 [[package]]
 name = "winnow"
-version = "0.5.15"
+version = "0.5.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c2e3184b9c4e92ad5167ca73039d0c42476302ab603e2fec4487511f38ccefc"
+checksum = "818ce546a11a9986bc24f93d0cdf38a8a1a400f1473ea8c82e59f6e0ffab9249"
 dependencies = [
  "memchr",
 ]
