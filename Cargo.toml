@@ -15,7 +15,7 @@ doctest = false
 
 [dependencies]
 rayon = "1.7.0"
-rodio = { version = "0.17.1", default-features = false, optional = true }
+rodio = { version = "0.17.3", default-features = false, optional = true }
 thiserror = "1.0.40"
 winnow = "0.5.36"
 

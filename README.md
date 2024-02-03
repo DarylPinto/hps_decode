@@ -15,14 +15,14 @@ A Rust library for parsing and decoding _Super Smash Bros. Melee_ music files.
 
 ## Quick Start
 
-Playing back a stereo `.hps` file with
-[rodio.](https://docs.rs/rodio/0.17.1/rodio/index.html)
+Decoding a stereo `.hps` file into audio and listening to it with
+[rodio:](https://docs.rs/rodio/0.17.3/rodio/index.html)
 
 In your `Cargo.toml`:
 ```toml
 [dependencies]
 hps_decode = { version = "0.2.1", features = ["rodio-source"] }
-rodio = { version = "0.17.1", default-features = false }
+rodio = { version = "0.17.3", default-features = false }
 ```
 
 In your `main.rs`:
