@@ -14,10 +14,10 @@ exclude = ["/test-data", "benches"]
 doctest = false
 
 [dependencies]
-rayon = "1.7.0"
-rodio = { version = "0.17.3", default-features = false, optional = true }
-thiserror = "1.0.40"
-winnow = "0.5.36"
+rayon = "1.10.0"
+rodio = { version = "0.*", default-features = false, optional = true }
+thiserror = "1.0.63"
+winnow = "0.6.18"
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }

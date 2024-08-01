@@ -3,7 +3,7 @@ use winnow::{
     combinator::repeat,
     error::{ContextError, ErrMode},
     seq,
-    token::{tag, take},
+    token::{literal, take},
 };
 
 use crate::errors::HpsParseError;
@@ -13,7 +13,7 @@ use winnow::prelude::*;
 pub(crate) fn parse_file_header(bytes: &mut &[u8]) -> Result<(u32, u32), HpsParseError> {
     use HpsParseError::*;
 
-    let _ = tag(" HALPST\0")
+    let _ = literal(" HALPST\0")
         .parse_next(bytes)
         .map_err(|_: ErrMode<ContextError>| InvalidMagicNumber)?;
     let sample_rate = be_u32.parse_next(bytes)?;
