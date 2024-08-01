@@ -1,5 +1,5 @@
 use thiserror::Error;
-use winnow::error::{ContextError, ErrMode, StrContext};
+use winnow::error::{ContextError, ErrMode};
 
 use crate::hps::COEFFICIENT_PAIRS_PER_CHANNEL;
 
@@ -16,8 +16,12 @@ pub enum HpsParseError {
     #[error("There was not enough data, {0:?} more bytes were needed")]
     Incomplete(winnow::error::Needed),
 
-    #[error("Tried to parse, but encountered invalid data: ({0:?})")]
-    InvalidData(ContextError<StrContext>),
+    #[error("Tried to parse, but encountered invalid data. Cause: {}",
+    match .0.cause() {
+        Some(cause) => cause.to_string(),
+        None => "None".to_string()
+    })]
+    InvalidData(ContextError),
 }
 
 impl From<ErrMode<ContextError>> for HpsParseError {
