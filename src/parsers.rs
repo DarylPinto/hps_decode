@@ -41,7 +41,7 @@ pub(crate) fn parse_channel_info(bytes: &mut &[u8]) -> PResult<ChannelInfo> {
         coefficients: coefficients.try_into().unwrap_or_else(|_| {
             // This is unreachable because the coefficients variable above
             // and ChannelInfo.coefficients both have a length of
-            // CHANNEL_COEFFICIENT_PAIR_COUNT
+            // COEFFICIENT_PAIRS_PER_CHANNEL
             unreachable!()
         }),
     })

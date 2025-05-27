@@ -24,16 +24,14 @@
 
 use std::collections::HashSet;
 
-use rayon::prelude::*;
-use winnow::prelude::*;
 use winnow::combinator::repeat;
+use winnow::prelude::*;
 
 use crate::decoded_hps::DecodedHps;
 use crate::errors::{HpsDecodeError, HpsParseError};
 use crate::parsers::{parse_block, parse_channel_info, parse_file_header};
 
 const DSP_BLOCK_SECTION_OFFSET: u32 = 0x80;
-pub(crate) const SAMPLES_PER_FRAME: usize = 14;
 pub(crate) const COEFFICIENT_PAIRS_PER_CHANNEL: usize = 8;
 
 /// A container for HPS file data.
@@ -118,80 +116,7 @@ impl Hps {
     /// Decode an [`Hps`] into audio. See the [module-level
     /// documentation](crate::hps) for more information.
     pub fn decode(&self) -> Result<DecodedHps, HpsDecodeError> {
-        let samples = self
-            .blocks
-            .par_iter()
-            .map(|block| {
-                // The first half of the frames in the block are for the left
-                // audio channel, and the other half are for the right
-                let half_index = block.frames.len() / 2;
-
-                // Decode the samples for the left and right audio channels
-                let left_samples = Self::decode_frames(
-                    &block.frames[..half_index],
-                    &block.decoder_states[0],
-                    &self.channel_info[0].coefficients,
-                )?;
-
-                let right_samples = Self::decode_frames(
-                    &block.frames[half_index..],
-                    &block.decoder_states[1],
-                    &self.channel_info[1].coefficients,
-                )?;
-
-                // Interleave the samples with each other
-                Ok(left_samples
-                    .into_iter()
-                    .zip(right_samples)
-                    .flat_map(|(left_sample, right_sample)| [left_sample, right_sample]))
-            })
-            .collect::<Result<Vec<_>, HpsDecodeError>>()?
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
-
-        Ok(DecodedHps::new(self, samples))
-    }
-
-    /// Decode a slice of DSP block frames into samples
-    fn decode_frames(
-        frames: &[Frame],
-        decoder_state: &DSPDecoderState,
-        coefficients: &[(i16, i16)],
-    ) -> Result<Vec<i16>, HpsDecodeError> {
-        let sample_count = frames.len() * SAMPLES_PER_FRAME;
-        let mut samples: Vec<i16> = Vec::with_capacity(sample_count);
-
-        let mut hist1 = decoder_state.initial_hist_1;
-        let mut hist2 = decoder_state.initial_hist_2;
-
-        for frame in frames {
-            let scale = 1 << (frame.header & 0xF);
-            let coef_index = (frame.header >> 4) as usize;
-            if coef_index >= COEFFICIENT_PAIRS_PER_CHANNEL {
-                return Err(HpsDecodeError::InvalidCoefficientIndex(coef_index));
-            }
-            let (coef1, coef2) = coefficients[coef_index];
-
-            frame
-                .encoded_sample_data
-                .iter()
-                .flat_map(|&byte| [get_high_nibble(byte), get_low_nibble(byte)])
-                .for_each(|nibble| {
-                    let sample = clamp_i16(
-                        (((nibble as i32 * scale) << 11)
-                            + 1024
-                            + (coef1 as i32 * hist1 as i32 + coef2 as i32 * hist2 as i32))
-                            >> 11,
-                    );
-
-                    hist2 = hist1;
-                    hist1 = sample;
-                    samples.push(sample);
-                });
-        }
-
-        Ok(samples)
+        Ok(DecodedHps::new(self))?
     }
 }
 
@@ -232,29 +157,6 @@ pub struct DSPDecoderState {
 pub struct Frame {
     pub header: u8,
     pub encoded_sample_data: [u8; 7],
-}
-
-static NIBBLE_TO_I8: [i8; 16] = [0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, -4, -3, -2, -1];
-
-#[inline(always)]
-fn get_low_nibble(byte: u8) -> i8 {
-    NIBBLE_TO_I8[(byte & 0xF) as usize]
-}
-
-#[inline(always)]
-fn get_high_nibble(byte: u8) -> i8 {
-    NIBBLE_TO_I8[((byte >> 4) & 0xF) as usize]
-}
-
-#[inline(always)]
-fn clamp_i16(val: i32) -> i16 {
-    if val < (i16::MIN as i32) {
-        i16::MIN
-    } else if val > (i16::MAX as i32) {
-        i16::MAX
-    } else {
-        val as i16
-    }
 }
 
 #[cfg(test)]
