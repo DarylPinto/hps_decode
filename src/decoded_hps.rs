@@ -19,7 +19,7 @@
 use rayon::prelude::*;
 
 use crate::errors::HpsDecodeError;
-use crate::hps::{DSPDecoderState, Frame, Hps, COEFFICIENT_PAIRS_PER_CHANNEL};
+use crate::hps::{COEFFICIENT_PAIRS_PER_CHANNEL, DSPDecoderState, Frame, Hps};
 
 const SAMPLES_PER_FRAME: usize = 14;
 
@@ -38,20 +38,20 @@ pub struct DecodedHps {
 }
 
 impl Iterator for DecodedHps {
-    type Item = i16;
+    type Item = f32;
 
     fn next(&mut self) -> Option<Self::Item> {
         match (self.samples.get(self.current_index), self.loop_sample_index) {
             // If there are more samples to play, return the next one
             (Some(&sample), _) => {
                 self.current_index += 1;
-                Some(sample)
+                Some(sample as f32 / i16::MAX as f32)
             }
             // If there are no more samples to play, but there's a loop_sample_index
             // return the sample at that index, and continue from there
             (None, Some(loop_sample_index)) => {
                 self.current_index = loop_sample_index + 1;
-                Some(self.samples[loop_sample_index])
+                Some(self.samples[loop_sample_index] as f32 / i16::MAX as f32)
             }
             // Otherwise, there's nothing else to play
             (None, None) => None,
@@ -194,7 +194,7 @@ fn clamp_i16(val: i32) -> i16 {
 
 #[cfg(feature = "rodio-source")]
 impl rodio::Source for DecodedHps {
-    fn current_frame_len(&self) -> Option<usize> {
+    fn current_span_len(&self) -> Option<usize> {
         None
     }
     fn channels(&self) -> u16 {

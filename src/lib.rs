@@ -3,19 +3,17 @@
 //! # Quick Start
 //!
 //! Decoding a stereo `.hps` file into audio and listening to it with
-//! [rodio:](https://docs.rs/rodio/0.17.3/rodio/index.html)
+//! [rodio:](https://docs.rs/rodio/0.21.1/rodio/index.html)
 //!
-//! In your `Cargo.toml`:
-//! ```toml
-//! [dependencies]
-//! hps_decode = { version = "0.2.1", features = ["rodio-source"] }
-//! rodio = { version = "0.17.3", default-features = false }
+//! Install dependencies:
+//! ```sh
+//! cargo add rodio hps_decode --no-default-features --features "rodio/playback hps_decode/rodio-source"
 //! ```
 //!
 //! In your `main.rs`:
 //! ```
 //! use hps_decode::Hps;
-//! use rodio::{OutputStream, Sink};
+//! use rodio::{OutputStreamBuilder, Sink};
 //! use std::error::Error;
 //!
 //! fn main() -> Result<(), Box<dyn Error>> {
@@ -24,8 +22,8 @@
 //!     let audio = hps.decode()?;
 //!
 //!     // Play the song with the rodio library
-//!     let (_stream, stream_handle) = OutputStream::try_default()?;
-//!     let sink = Sink::try_new(&stream_handle)?;
+//!     let stream_handle = OutputStreamBuilder::open_default_stream()?;
+//!     let sink = Sink::connect_new(&stream_handle.mixer());
 //!
 //!     sink.append(audio);
 //!     sink.play();

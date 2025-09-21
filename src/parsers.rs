@@ -1,32 +1,34 @@
 use winnow::{
-    binary::{be_i16, be_u32, be_u8},
+    binary::{be_i16, be_u8, be_u32},
     combinator::repeat,
-    error::{ContextError, ErrMode},
+    error::ContextError,
     seq,
     token::{literal, take},
 };
 
 use crate::errors::HpsParseError;
-use crate::hps::{Block, ChannelInfo, DSPDecoderState, Frame, COEFFICIENT_PAIRS_PER_CHANNEL};
+use crate::hps::{Block, COEFFICIENT_PAIRS_PER_CHANNEL, ChannelInfo, DSPDecoderState, Frame};
 use winnow::prelude::*;
 
 pub(crate) fn parse_file_header(bytes: &mut &[u8]) -> Result<(u32, u32), HpsParseError> {
-    use HpsParseError::*;
-
     let _ = literal(" HALPST\0")
         .parse_next(bytes)
-        .map_err(|_: ErrMode<ContextError>| InvalidMagicNumber)?;
-    let sample_rate = be_u32.parse_next(bytes)?;
-    let channel_count = be_u32.parse_next(bytes)?;
+        .map_err(|_: ContextError| HpsParseError::InvalidMagicNumber)?;
+    let sample_rate = be_u32
+        .parse_next(bytes)
+        .map_err(|e: ContextError| HpsParseError::InvalidData(e))?;
+    let channel_count = be_u32
+        .parse_next(bytes)
+        .map_err(|e: ContextError| HpsParseError::InvalidData(e))?;
 
     if channel_count != 2 {
-        return Err(UnsupportedChannelCount(channel_count));
+        return Err(HpsParseError::UnsupportedChannelCount(channel_count));
     }
 
     Ok((sample_rate, channel_count))
 }
 
-pub(crate) fn parse_channel_info(bytes: &mut &[u8]) -> PResult<ChannelInfo> {
+pub(crate) fn parse_channel_info(bytes: &mut &[u8]) -> winnow::Result<ChannelInfo> {
     let largest_block_length = be_u32.parse_next(bytes)?;
     let _ = take(4usize).parse_next(bytes)?;
     let sample_count = be_u32.parse_next(bytes)?;
@@ -47,7 +49,7 @@ pub(crate) fn parse_channel_info(bytes: &mut &[u8]) -> PResult<ChannelInfo> {
     })
 }
 
-pub(crate) fn parse_block(file_size: usize) -> impl FnMut(&mut &[u8]) -> PResult<Block> {
+pub(crate) fn parse_block(file_size: usize) -> impl FnMut(&mut &[u8]) -> winnow::Result<Block> {
     move |bytes: &mut &[u8]| {
         let offset = file_size - bytes.len();
         let dsp_data_length = be_u32.parse_next(bytes)?;
@@ -71,7 +73,7 @@ pub(crate) fn parse_block(file_size: usize) -> impl FnMut(&mut &[u8]) -> PResult
 }
 
 #[inline]
-fn parse_dsp_decoder_state(bytes: &mut &[u8]) -> PResult<DSPDecoderState> {
+fn parse_dsp_decoder_state(bytes: &mut &[u8]) -> winnow::Result<DSPDecoderState> {
     let _ps_hi = take(1usize).parse_next(bytes)?;
     let _ps = take(1usize).parse_next(bytes)?;
     let initial_hist_1 = be_i16.parse_next(bytes)?;
@@ -87,7 +89,7 @@ fn parse_dsp_decoder_state(bytes: &mut &[u8]) -> PResult<DSPDecoderState> {
 }
 
 #[inline(always)]
-fn parse_frame(bytes: &mut &[u8]) -> PResult<Frame> {
+fn parse_frame(bytes: &mut &[u8]) -> winnow::Result<Frame> {
     Ok(Frame {
         header: be_u8.parse_next(bytes)?,
         encoded_sample_data: [

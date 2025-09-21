@@ -2,11 +2,11 @@
 name = "hps_decode"
 description = "A library for parsing and decoding Super Smash Bros. Melee music files"
 version = "0.2.1"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 repository = "https://github.com/DarylPinto/hps_decode"
 readme = "README.md"
-exclude = ["/test-data", "benches"]
+exclude = ["/test-data", "/benches"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,13 +14,13 @@ exclude = ["/test-data", "benches"]
 doctest = false
 
 [dependencies]
-rayon = "1.10.0"
+rayon = "1.11.0"
 rodio = { version = "0.*", default-features = false, optional = true }
-thiserror = "1.0.63"
-winnow = "0.6.18"
+thiserror = "2.0.16"
+winnow = "0.7.13"
 
 [dev-dependencies]
-criterion = { version = "0.5.1", features = ["html_reports"] }
+criterion = { version = "0.7.0", features = ["html_reports"] }
 
 [features]
 rodio-source = ["dep:rodio"]
