@@ -6,7 +6,7 @@ edition = "2024"
 license = "MIT"
 repository = "https://github.com/DarylPinto/hps_decode"
 readme = "README.md"
-exclude = ["/test-data", "/benches"]
+exclude = ["/benches", "/examples", "/test-data"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -21,6 +21,7 @@ winnow = "0.7.13"
 
 [dev-dependencies]
 criterion = { version = "0.7.0", features = ["html_reports"] }
+rodio = { version = "0.*", default-features = false, features = ["playback"] }
 
 [features]
 rodio-source = ["dep:rodio"]
