@@ -18,6 +18,8 @@
 
 use rayon::prelude::*;
 
+#[cfg(feature = "rodio-source")]
+use crate::decoded_hps_rodio_source::DecodedHpsRodioSource;
 use crate::errors::HpsDecodeError;
 use crate::hps::{COEFFICIENT_PAIRS_PER_CHANNEL, DSPDecoderState, Frame, Hps};
 
@@ -38,20 +40,20 @@ pub struct DecodedHps {
 }
 
 impl Iterator for DecodedHps {
-    type Item = f32;
+    type Item = i16;
 
     fn next(&mut self) -> Option<Self::Item> {
         match (self.samples.get(self.current_index), self.loop_sample_index) {
             // If there are more samples to play, return the next one
             (Some(&sample), _) => {
                 self.current_index += 1;
-                Some(sample as f32 / i16::MAX as f32)
+                Some(sample)
             }
             // If there are no more samples to play, but there's a loop_sample_index
             // return the sample at that index, and continue from there
             (None, Some(loop_sample_index)) => {
                 self.current_index = loop_sample_index + 1;
-                Some(self.samples[loop_sample_index] as f32 / i16::MAX as f32)
+                Some(self.samples[loop_sample_index])
             }
             // Otherwise, there's nothing else to play
             (None, None) => None,
@@ -167,6 +169,13 @@ impl DecodedHps {
         let samples_per_second = (self.sample_rate * self.channel_count) as u64;
         std::time::Duration::from_millis(1000 * sample_count / samples_per_second)
     }
+
+    /// Converts the [`DecodedHps`] into a source that can be played by the [`rodio`](https://docs.rs/rodio/0.21.1/rodio/index.html) crate.
+    #[cfg_attr(docsrs, doc(cfg(feature = "rodio-source")))]
+    #[cfg(feature = "rodio-source")]
+    pub fn into_rodio_source(self) -> DecodedHpsRodioSource {
+        DecodedHpsRodioSource::new(self)
+    }
 }
 
 static NIBBLE_TO_I8: [i8; 16] = [0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, -4, -3, -2, -1];
@@ -189,25 +198,5 @@ fn clamp_i16(val: i32) -> i16 {
         i16::MAX
     } else {
         val as i16
-    }
-}
-
-#[cfg(feature = "rodio-source")]
-impl rodio::Source for DecodedHps {
-    fn current_span_len(&self) -> Option<usize> {
-        None
-    }
-    fn channels(&self) -> u16 {
-        self.channel_count as u16
-    }
-    fn sample_rate(&self) -> u32 {
-        self.sample_rate
-    }
-    fn total_duration(&self) -> Option<std::time::Duration> {
-        if self.is_looping() {
-            None
-        } else {
-            Some(self.duration())
-        }
     }
 }
