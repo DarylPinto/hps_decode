@@ -23,13 +23,7 @@ use crate::decoded_hps::DecodedHps;
 ///
 /// For general usage, see the [module-level documentation.](crate::decoded_hps_rodio_source)
 #[derive(Debug, Clone, PartialEq)]
-pub struct DecodedHpsRodioSource(DecodedHps);
-
-impl DecodedHpsRodioSource {
-    pub(crate) fn new(decoded_hps: DecodedHps) -> Self {
-        Self(decoded_hps)
-    }
-}
+pub struct DecodedHpsRodioSource(pub(crate) DecodedHps);
 
 impl Iterator for DecodedHpsRodioSource {
     type Item = f32;

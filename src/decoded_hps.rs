@@ -174,7 +174,7 @@ impl DecodedHps {
     #[cfg_attr(docsrs, doc(cfg(feature = "rodio-source")))]
     #[cfg(feature = "rodio-source")]
     pub fn into_rodio_source(self) -> DecodedHpsRodioSource {
-        DecodedHpsRodioSource::new(self)
+        DecodedHpsRodioSource(self)
     }
 }
 
